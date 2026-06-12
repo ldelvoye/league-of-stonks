@@ -1,4 +1,5 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+dotenv.config({ quiet: true });
 import { closeDb, getPool, initDb } from "../backend/db/index.js";
 
 const TEST_PLAYER = {
@@ -40,11 +41,11 @@ async function main(): Promise<void> {
      DO UPDATE SET
        puuid = EXCLUDED.puuid,
        updated_at = NOW()
-     RETURNING id`,
+     RETURNING player_id`,
     [TEST_PLAYER.gameName, TEST_PLAYER.tagLine, TEST_PLAYER.puuid, TEST_PLAYER.platform],
   );
 
-  const playerId = playerRows[0].id as number;
+  const playerId = playerRows[0].player_id as number;
 
   await pool.query(`DELETE FROM score_snapshots WHERE player_id = $1`, [playerId]);
 

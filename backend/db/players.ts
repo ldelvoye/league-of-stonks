@@ -1,7 +1,7 @@
 import { getPool } from "./index.js";
 
 export interface Player {
-  id: number;
+  playerId: number;
   gameName: string;
   tagLine: string;
   puuid: string;
@@ -10,13 +10,16 @@ export interface Player {
   updatedAt: Date;
 }
 
+const PLAYER_COLUMNS =
+  "player_id, game_name, tag_line, puuid, platform, created_at, updated_at";
+
 function mapPlayer(row: Record<string, unknown> | undefined): Player | null {
   if (!row) {
     return null;
   }
 
   return {
-    id: row.id as number,
+    playerId: row.player_id as number,
     gameName: row.game_name as string,
     tagLine: row.tag_line as string,
     puuid: row.puuid as string,
@@ -25,9 +28,6 @@ function mapPlayer(row: Record<string, unknown> | undefined): Player | null {
     updatedAt: row.updated_at as Date,
   };
 }
-
-const PLAYER_COLUMNS =
-  "id, game_name, tag_line, puuid, platform, created_at, updated_at";
 
 export async function findPlayerByRiotId(
   gameName: string,
@@ -44,7 +44,7 @@ export async function findPlayerByRiotId(
   return mapPlayer(rows[0]);
 }
 
-export async function upsertPlayer(player: Omit<Player, "id" | "createdAt" | "updatedAt">): Promise<Player> {
+export async function upsertPlayer(player: Omit<Player, "playerId" | "createdAt" | "updatedAt">): Promise<Player> {
   const { gameName, tagLine, puuid, platform } = player;
   const { rows } = await getPool().query(
     `INSERT INTO players (game_name, tag_line, puuid, platform)
@@ -61,5 +61,5 @@ export async function upsertPlayer(player: Omit<Player, "id" | "createdAt" | "up
 }
 
 export async function touchPlayer(playerId: number): Promise<void> {
-  await getPool().query(`UPDATE players SET updated_at = NOW() WHERE id = $1`, [playerId]);
+  await getPool().query(`UPDATE players SET updated_at = NOW() WHERE player_id = $1`, [playerId]);
 }

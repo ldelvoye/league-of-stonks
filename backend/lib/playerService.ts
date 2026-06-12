@@ -42,7 +42,7 @@ export async function getPlayerHistory(
     return null;
   }
 
-  const history = await getScoreHistory(player.id, { limit });
+  const history = await getScoreHistory(player.playerId, { limit });
   return {
     gameName: player.gameName,
     tagLine: player.tagLine,
@@ -57,7 +57,7 @@ export async function getPlayerScore(
 ): Promise<number | null> {
   const player = await resolvePlayer(gameName, tagLine, platform);
 
-  const [latest] = await getScoreHistory(player.id, { limit: 1 });
+  const [latest] = await getScoreHistory(player.playerId, { limit: 1 });
   if (!canRefreshPlayer(latest?.recordedAt ?? null)) {
     return latest?.score ?? null;
   }
@@ -66,8 +66,8 @@ export async function getPlayerScore(
   const soloRanked = toSoloRanked(ranked);
   const score = soloRanked?.score ?? null;
 
-  await recordScoreSnapshot(player.id, score);
-  await touchPlayer(player.id);
+  await recordScoreSnapshot(player.playerId, score);
+  await touchPlayer(player.playerId);
 
   return score;
 }

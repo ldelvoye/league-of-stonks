@@ -1,0 +1,32 @@
+{
+  "name": "league-of-stonks",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm run dev:backend",
+    "dev:backend": "tsx backend/index.ts",
+    "dev:frontend": "tsc -p frontend/tsconfig.json --watch",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "tsc",
+    "build:frontend": "tsc -p frontend/tsconfig.json",
+    "start:backend": "node backend/dist/index.js",
+    "start:frontend": "npx serve frontend",
+    "start:frontend:local": "npx serve frontend -l 3001",
+    "db:up": "docker compose up -d db",
+    "db:migrate": "tsx backend/db/migrate.ts",
+    "db:seed": "tsx scripts/seed-test-player.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "pg": "^8.21.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.9.3",
+    "@types/pg": "^8.20.0",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  }
+}

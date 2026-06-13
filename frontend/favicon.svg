@@ -1,15 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36">
   <defs>
-    <linearGradient id="brand-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#16c784" />
-      <stop offset="100%" stop-color="#4ce0a8" />
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0e1a" />
+      <stop offset="100%" stop-color="#0d1428" />
     </linearGradient>
   </defs>
-  <rect width="36" height="36" rx="10" fill="url(#brand-gradient)" />
+  <!-- Notched hextech frame -->
+  <polygon
+    points="6,0 30,0 36,6 36,30 30,36 6,36 0,30 0,6"
+    fill="url(#bg-grad)"
+    stroke="#c89b3c"
+    stroke-width="1.5"
+  />
+  <!-- Candlestick chart icon in gold -->
   <g
     transform="translate(7, 7)"
     fill="none"
-    stroke="#04110b"
+    stroke="#c89b3c"
     stroke-width="2.4"
     stroke-linecap="round"
     stroke-linejoin="round"

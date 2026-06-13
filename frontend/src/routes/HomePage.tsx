@@ -15,17 +15,58 @@ export function HomePage() {
 
   return (
     <section className="welcome">
-      <h1 className="welcome-title">Track the rise &amp; fall of summoner rank</h1>
-      <p className="welcome-sub">
-        Look up any player by their Riot ID to see their price-per-share history in LP.
-      </p>
-      <p className="welcome-hint">
-        Early-stage beta: only players on the NA server are currently supported.
-      </p>
-      <div className="welcome-actions">
-        <Link className={portfolioCtaClass} to={portfolioCtaTarget}>
-          {portfolioCtaLabel}
-        </Link>
+      <div className="welcome-hero-panel">
+        <p className="welcome-kicker">Solo Queue Exchange</p>
+        <h1 className="welcome-title">Trade the ranked grind of your favorite frauds</h1>
+        <p className="welcome-sub">
+          Every LP gain and int-fest is a price movement. Back the believers, short the inters, and build a
+          portfolio of the solo queue degenerates you follow anyway.
+        </p>
+        <p className="welcome-hint">
+          Currently tracking NA ranked. More regions incoming — assuming Riot doesn't patch out the suffering.
+        </p>
+        <div className="welcome-actions">
+          <Link className={portfolioCtaClass} to={portfolioCtaTarget}>
+            {portfolioCtaLabel}
+          </Link>
+        </div>
+      </div>
+
+      <div className="home-grid">
+        <section className="home-panel">
+          <header className="home-panel-head">
+            <h2 className="home-panel-title">Market Pulse</h2>
+            <span className="home-panel-tag">Coming soon</span>
+          </header>
+          <p className="home-panel-copy">
+            This strip will surface major LP movers, macro volatility, and matchday sentiment widgets.
+          </p>
+        </section>
+
+        <section className="home-panel">
+          <header className="home-panel-head">
+            <h2 className="home-panel-title">Top Performers</h2>
+            <span className="home-panel-tag">Leaderboard scaffold</span>
+          </header>
+          <div className="home-placeholder-list" aria-hidden="true">
+            <div className="home-placeholder-row champion-slot-pulse" />
+            <div className="home-placeholder-row champion-slot-pulse" />
+            <div className="home-placeholder-row champion-slot-pulse" />
+          </div>
+        </section>
+
+        <section className="home-panel">
+          <header className="home-panel-head">
+            <h2 className="home-panel-title">Recent Trades</h2>
+            <span className="home-panel-tag">Activity scaffold</span>
+          </header>
+          <div className="home-placeholder-list" aria-hidden="true">
+            <div className="home-placeholder-row champion-slot-pulse" />
+            <div className="home-placeholder-row champion-slot-pulse" />
+            <div className="home-placeholder-row champion-slot-pulse" />
+            <div className="home-placeholder-row champion-slot-pulse" />
+          </div>
+        </section>
       </div>
     </section>
   );

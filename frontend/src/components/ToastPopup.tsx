@@ -15,6 +15,9 @@ export function ToastPopup() {
       }}
     >
       <div className="toast-popup-card">
+        <p className="toast-popup-kicker" aria-hidden="true">
+          Summoner Alert
+        </p>
         <p id="toast-popup-message" className="toast-popup-text">
           {toastMessage}
         </p>

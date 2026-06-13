@@ -71,6 +71,8 @@ export function App() {
   const location = useLocation();
   const { user } = useAuth();
   const { showToast } = useToast();
+  const portfolioTarget = !user ? "/login" : user.emailVerified ? "/portfolio" : "/account";
+  const portfolioLabel = !user ? "Portfolio" : user.emailVerified ? "Portfolio" : "Verify to trade";
 
   const initialSearchValue = useMemo(() => playerSearchValue(location.pathname) ?? "", []);
   const [searchValue, setSearchValue] = useState(initialSearchValue);
@@ -95,7 +97,7 @@ export function App() {
     event.preventDefault();
     const parsed = parseRiotId(searchValue);
     if (!parsed) {
-      showToast("Enter a Riot ID like Faker#KR1 (GameName#TagLine).");
+      showToast("Enter a Riot ID like T1 OK GOOD YES#NA1 (GameName#TagLine).");
       return;
     }
     navigate(buildPlayerRoute(parsed.gameName, parsed.tagLine));
@@ -125,12 +127,18 @@ export function App() {
           </span>
         </Link>
 
+        <nav className="top-nav" aria-label="Primary">
+          <Link className="top-nav-link" to={portfolioTarget}>
+            {portfolioLabel}
+          </Link>
+        </nav>
+
         <form className="search" role="search" autoComplete="off" onSubmit={handleSearchSubmit}>
           <input
             className="search-input"
             type="text"
             name="riotId"
-            placeholder="Search a Riot ID — e.g. Faker#KR1"
+            placeholder="Search a Riot ID — e.g. T1 OK GOOD YES#NA1"
             aria-label="Riot ID"
             spellCheck={false}
             value={searchValue}
@@ -166,7 +174,9 @@ export function App() {
       </header>
 
       <main className="content">
-        <Suspense fallback={<StatusMessage variant="loading" text="Loading page..." />}>
+        <Suspense
+          fallback={<StatusMessage variant="loading" loadingWidget="lp-bar" text="Loading rift data..." />}
+        >
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/player/:gameName/:tagLine" element={<PlayerPage />} />
@@ -185,7 +195,11 @@ export function App() {
       </main>
 
       <footer className="site-footer">
-        <span>League of Stonks</span>
+        <p className="site-footer-legal">
+          League of Stonks isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games
+          or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all
+          associated properties are trademarks or registered trademarks of Riot Games, Inc.
+        </p>
       </footer>
 
       <ToastPopup />

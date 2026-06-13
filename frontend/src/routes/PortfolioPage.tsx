@@ -36,7 +36,7 @@ function parseApiErrorBody(value: unknown): ApiErrorBody | null {
 }
 
 function compactHistory(points: Snapshot[]): Snapshot[] {
-  return points.slice(-20);
+  return points.slice(-30);
 }
 
 export function PortfolioPage() {
@@ -100,7 +100,7 @@ export function PortfolioPage() {
   }
 
   if (portfolioQuery.isPending) {
-    return <StatusMessage variant="loading" text="Loading portfolio..." />;
+    return <StatusMessage variant="loading" loadingWidget="lp-bar" text="Loading portfolio..." />;
   }
 
   if (portfolioQuery.isError) {
@@ -117,9 +117,10 @@ export function PortfolioPage() {
 
   return (
     <section className="portfolio-page">
+      {/* ── Summary header ─────────────────────────────── */}
       <header className="portfolio-header">
         <h1 className="portfolio-title">My portfolio</h1>
-        <p className="portfolio-subtitle">Track your holdings and open any position to trade that player.</p>
+        <p className="portfolio-subtitle">Track your holdings. Open any position to trade that summoner.</p>
         <div className="portfolio-kpis">
           <div className="portfolio-kpi">
             <span className="portfolio-kpi-label">Available balance</span>
@@ -140,6 +141,16 @@ export function PortfolioPage() {
         </div>
       </header>
 
+      {/* ── Total portfolio performance placeholder ─────── */}
+      <div className="portfolio-perf-panel">
+        <div className="portfolio-perf-head">
+          <span className="portfolio-perf-title">Portfolio Performance</span>
+          <span className="portfolio-perf-tag">Coming soon</span>
+        </div>
+        <div className="portfolio-perf-placeholder champion-slot-pulse" aria-hidden="true" />
+      </div>
+
+      {/* ── Individual positions ────────────────────────── */}
       {positions.length === 0 ? (
         <div className="portfolio-empty">
           <p>You do not own any player shares yet.</p>
@@ -148,10 +159,10 @@ export function PortfolioPage() {
           </p>
         </div>
       ) : (
-        <div className="portfolio-grid">
+        <div className="portfolio-positions">
           {positions.map((position, index) => {
             const history = positionHistoryQueries[index]?.data ?? [];
-            const historyFailed = positionHistoryQueries[index]?.isError ?? false;
+            const historyPending = positionHistoryQueries[index]?.isPending ?? false;
             const gainValue = toNumeric(position.unrealizedGain) ?? 0;
             const gainPct = toNumeric(position.unrealizedGainPct);
             const lastTradeAt = portfolioQuery.data?.trades.find(
@@ -163,40 +174,53 @@ export function PortfolioPage() {
             return (
               <Link
                 key={`${position.gameName.toLowerCase()}#${position.tagLine.toLowerCase()}`}
-                className="portfolio-card"
+                className="portfolio-pos"
                 to={buildPlayerRoute(position.gameName, position.tagLine)}
               >
-                <div className="portfolio-card-head">
-                  <div>
-                    <h2 className="portfolio-card-name">{position.gameName}</h2>
-                    <p className="portfolio-card-tag">#{position.tagLine}</p>
+                {/* Identity */}
+                <div className="portfolio-pos-identity">
+                  <h2 className="portfolio-pos-name">{position.gameName}</h2>
+                  <p className="portfolio-pos-tag">#{position.tagLine}</p>
+                  <p className="portfolio-pos-meta">
+                    {lastTradeAt ? `Last trade ${formatDate(lastTradeAt)}` : "No trades yet"}
+                  </p>
+                </div>
+
+                {/* Stats grid */}
+                <div className="portfolio-pos-stats">
+                  <div className="portfolio-stat">
+                    <span className="portfolio-stat-label">Shares</span>
+                    <span className="portfolio-stat-value">{formatShares(position.shares) ?? "0"}</span>
                   </div>
-                  <div className={`portfolio-card-gain ${trendClass(gainValue)}`}>
-                    <span>{formatSignedMoney(gainValue)} LP</span>
-                    <span>{gainPct == null ? "n/a" : formatPercent(gainPct)}</span>
+                  <div className="portfolio-stat">
+                    <span className="portfolio-stat-label">Avg cost</span>
+                    <span className="portfolio-stat-value">{formatMoney(position.avgCost) ?? "—"} LP</span>
+                  </div>
+                  <div className="portfolio-stat">
+                    <span className="portfolio-stat-label">Current</span>
+                    <span className="portfolio-stat-value">{formatMoney(position.currentPrice) ?? "—"} LP</span>
+                  </div>
+                  <div className="portfolio-stat">
+                    <span className="portfolio-stat-label">Position value</span>
+                    <span className="portfolio-stat-value">{formatMoney(position.marketValue) ?? "—"} LP</span>
                   </div>
                 </div>
 
-                <div className="portfolio-card-metrics">
-                  <span>Shares: {formatShares(position.shares) ?? "0"}</span>
-                  <span>Avg cost: {formatMoney(position.avgCost) ?? "0.00"} LP</span>
-                  <span>Current: {formatMoney(position.currentPrice) ?? "n/a"} LP</span>
-                  <span>Position value: {formatMoney(position.marketValue) ?? "n/a"} LP</span>
+                {/* P/L */}
+                <div className={`portfolio-pos-gain ${trendClass(gainValue)}`}>
+                  <span className="portfolio-pos-gain-lp">{formatSignedMoney(gainValue)} LP</span>
+                  <span className="portfolio-pos-gain-pct">
+                    {gainPct == null ? "—" : formatPercent(gainPct)}
+                  </span>
                 </div>
 
-                <div className="portfolio-card-chart">
-                  {historyFailed ? (
-                    <p className="portfolio-chart-fallback">Chart unavailable.</p>
+                {/* Sparkline */}
+                <div className="portfolio-pos-spark">
+                  {historyPending ? (
+                    <div className="portfolio-spark-skeleton champion-slot-pulse" aria-hidden="true" />
                   ) : history.length > 0 ? (
-                    <StockChart points={history} />
-                  ) : (
-                    <p className="portfolio-chart-fallback">No chart data yet.</p>
-                  )}
-                </div>
-
-                <div className="portfolio-card-footer">
-                  <span>{lastTradeAt ? `Last trade ${formatDate(lastTradeAt)}` : "No trades yet"}</span>
-                  <span>Open player chart</span>
+                    <StockChart points={history} sparkline />
+                  ) : null}
                 </div>
               </Link>
             );

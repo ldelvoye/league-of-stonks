@@ -324,6 +324,7 @@ export function PlayerPage() {
 
   return (
     <section className="player-card">
+      {/* ── Full-width header row ──────────────────────── */}
       <div className="player-head">
         <div className="player-id">
           <div className="player-riot-id">
@@ -362,19 +363,13 @@ export function PlayerPage() {
           ) : null}
         </div>
 
-        <div className="player-score">
-          <span className="score-label">{priceLabel}</span>
-          <span className="score-value">{currentPrice}</span>
-          <div className="score-trend">
-            {deltaText ? (
-              <span className={`score-change ${trendClass(delta ?? 0)}`}>{deltaText}</span>
-            ) : null}
-            <span className="score-context">{priceContext}</span>
-          </div>
+        <div className="player-head-meta">
+          <span>{history.length === 1 ? "1 game" : `${history.length} games`}</span>
+          {latest ? <span>Latest {formatDate(latest.recordedAt)}</span> : null}
         </div>
 
         <button
-          className={`btn btn-ghost ${isRefreshBusy ? "is-busy" : ""}`}
+          className={`btn btn-ghost player-refresh ${isRefreshBusy ? "is-busy" : ""}`}
           type="button"
           onClick={() => void handleRefresh()}
           disabled={isRefreshBusy}
@@ -398,106 +393,121 @@ export function PlayerPage() {
         </button>
       </div>
 
-      <div className="player-meta">
-        <span>{history.length === 1 ? "1 game" : `${history.length} games`}</span>
-        <span>{latest ? `Latest game ${formatDate(latest.recordedAt)}` : ""}</span>
-      </div>
-
-      <div className="player-trade-panel">
-        {!user ? (
-          <p className="player-trade-message">
-            Sign in to buy or sell shares for this player. <Link to="/login">Log in</Link>
-          </p>
-        ) : !user.emailVerified ? (
-          <p className="player-trade-message">
-            Verify your email to unlock portfolio trading. <Link to="/account">Go to account</Link>
-          </p>
-        ) : portfolioQuery.isPending ? (
-          <p className="player-trade-message">Loading your portfolio...</p>
-        ) : portfolioQuery.isError ? (
-          <p className="player-trade-message">{portfolioErrorText(portfolioQuery.error)}</p>
-        ) : (
-          <>
-            <div className="player-trade-summary">
-              <span>
-                Owned shares: <strong>{formatShares(ownedPosition?.shares ?? "0") ?? "0"}</strong>
-              </span>
-              <span>
-                Available balance: <strong>{formatMoney(portfolioQuery.data?.lpBalance) ?? "0.00"} LP</strong>
-              </span>
-            </div>
-            <div className="player-trade-controls">
-              <label className="field player-trade-field">
-                <span className="field-label">Shares</span>
-                <input
-                  className="field-input player-trade-input"
-                  type="text"
-                  inputMode="decimal"
-                  value={sharesInput}
-                  onChange={(event) => setSharesInput(event.target.value)}
-                  aria-label="Shares to trade"
-                  placeholder="e.g. 0.25"
-                />
-                <span className="field-hint player-trade-field-hint">Supports up to 3 decimal places.</span>
-              </label>
-              <div className="player-trade-actions">
-                <button
-                  className="btn btn-primary"
-                  type="button"
-                  disabled={buyDisabled}
-                  onClick={() => void handleTrade("buy")}
-                >
-                  {tradeBusySide === "buy" ? "Buying…" : "Buy"}
-                </button>
-                <button
-                  className="btn btn-ghost"
-                  type="button"
-                  disabled={sellDisabled}
-                  onClick={() => void handleTrade("sell")}
-                >
-                  {tradeBusySide === "sell" ? "Selling…" : "Sell"}
-                </button>
+      {/* ── Two-column body ────────────────────────────── */}
+      <div className="player-body">
+        {/* Left: chart */}
+        <div className="player-chart-col">
+          {hasData ? (
+            <>
+              <div className="range-filters" role="group" aria-label="Game range">
+                {RANGES.map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    className={`range-btn ${range === option.key ? "is-active" : ""}`}
+                    aria-label={option.description}
+                    aria-pressed={range === option.key}
+                    onClick={() => setRange(option.key)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
               </div>
-            </div>
-            <div className="player-trade-meta">
-              {tradeHint ? <span className="player-trade-hint">{tradeHint}</span> : null}
-              <span>
-                Est. order value:{" "}
-                {estimatedOrderValue != null ? `${formatMoney(estimatedOrderValue) ?? "0.00"} LP` : "n/a"}
-              </span>
-              {ownedPosition?.unrealizedGain && ownedPosition.unrealizedGainPct ? (
-                <span className={trendClass(toNumeric(ownedPosition.unrealizedGain) ?? 0)}>
-                  Position P/L:{" "}
-                  {`${formatSignedMoney(toNumeric(ownedPosition.unrealizedGain) ?? 0)} LP (${formatPercent(toNumeric(ownedPosition.unrealizedGainPct) ?? 0)})`}
-                </span>
-              ) : null}
-            </div>
-          </>
-        )}
-      </div>
+              <StockChart points={visible} onHover={handleHover} />
+            </>
+          ) : (
+            <p className="history-empty">No game history recorded yet.</p>
+          )}
+        </div>
 
-      <div className="chart">
-        {hasData ? (
-          <>
-            <div className="range-filters" role="group" aria-label="Game range">
-              {RANGES.map((option) => (
-                <button
-                  key={option.key}
-                  type="button"
-                  className={`range-btn ${range === option.key ? "is-active" : ""}`}
-                  aria-label={option.description}
-                  aria-pressed={range === option.key}
-                  onClick={() => setRange(option.key)}
-                >
-                  {option.label}
-                </button>
-              ))}
+        {/* Right: price display + trade panel */}
+        <div className="player-trade-col">
+          {/* Price display */}
+          <div className="player-price-display">
+            <span className="score-label">{priceLabel}</span>
+            <span className="score-value">{currentPrice}</span>
+            <div className="score-trend">
+              {deltaText ? (
+                <span className={`score-change ${trendClass(delta ?? 0)}`}>{deltaText}</span>
+              ) : null}
+              <span className="score-context">{priceContext}</span>
             </div>
-            <StockChart points={visible} onHover={handleHover} />
-          </>
-        ) : (
-          <p className="history-empty">No game history recorded yet.</p>
-        )}
+          </div>
+
+          {/* Trade panel */}
+          <div className="player-trade-panel">
+            {!user ? (
+              <p className="player-trade-message">
+                Sign in to buy or sell shares for this player. <Link to="/login">Log in</Link>
+              </p>
+            ) : !user.emailVerified ? (
+              <p className="player-trade-message">
+                Verify your email to unlock portfolio trading. <Link to="/account">Go to account</Link>
+              </p>
+            ) : portfolioQuery.isPending ? (
+              <p className="player-trade-message">Loading your portfolio...</p>
+            ) : portfolioQuery.isError ? (
+              <p className="player-trade-message">{portfolioErrorText(portfolioQuery.error)}</p>
+            ) : (
+              <>
+                <div className="player-trade-summary">
+                  <span>
+                    Owned: <strong>{formatShares(ownedPosition?.shares ?? "0") ?? "0"} shares</strong>
+                  </span>
+                  <span>
+                    Balance: <strong>{formatMoney(portfolioQuery.data?.lpBalance) ?? "0.00"} LP</strong>
+                  </span>
+                </div>
+                <div className="player-trade-controls">
+                  <label className="field player-trade-field">
+                    <span className="field-label">Shares</span>
+                    <input
+                      className="field-input player-trade-input"
+                      type="text"
+                      inputMode="decimal"
+                      value={sharesInput}
+                      onChange={(event) => setSharesInput(event.target.value)}
+                      aria-label="Shares to trade"
+                      placeholder="e.g. 0.25"
+                    />
+                    <span className="field-hint player-trade-field-hint">Up to 3 decimal places.</span>
+                  </label>
+                  <div className="player-trade-actions">
+                    <button
+                      className="btn btn-primary trade-action-buy"
+                      type="button"
+                      disabled={buyDisabled}
+                      onClick={() => void handleTrade("buy")}
+                    >
+                      {tradeBusySide === "buy" ? "Buying…" : "Buy"}
+                    </button>
+                    <button
+                      className="btn btn-ghost trade-action-sell"
+                      type="button"
+                      disabled={sellDisabled}
+                      onClick={() => void handleTrade("sell")}
+                    >
+                      {tradeBusySide === "sell" ? "Selling…" : "Sell"}
+                    </button>
+                  </div>
+                </div>
+                <div className="player-trade-meta">
+                  {tradeHint ? <span className="player-trade-hint">{tradeHint}</span> : null}
+                  <span>
+                    Est. order:{" "}
+                    {estimatedOrderValue != null ? `${formatMoney(estimatedOrderValue) ?? "0.00"} LP` : "n/a"}
+                  </span>
+                  {ownedPosition?.unrealizedGain && ownedPosition.unrealizedGainPct ? (
+                    <span className={trendClass(toNumeric(ownedPosition.unrealizedGain) ?? 0)}>
+                      Position P/L:{" "}
+                      {`${formatSignedMoney(toNumeric(ownedPosition.unrealizedGain) ?? 0)} LP (${formatPercent(toNumeric(ownedPosition.unrealizedGainPct) ?? 0)})`}
+                    </span>
+                  ) : null}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </section>
   );

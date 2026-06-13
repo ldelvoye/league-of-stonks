@@ -148,7 +148,7 @@ export function AccountPage({ guestMode }: AccountPageProps) {
         />
       ) : null}
 
-      <section className="auth-card auth-card--wide">
+      <section className={`auth-card auth-card--wide ${user ? "account-shell" : "auth-shell"}`}>
         {user ? (
           <div>
             <h1 className="auth-title">My account</h1>

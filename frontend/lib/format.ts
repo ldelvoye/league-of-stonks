@@ -48,6 +48,13 @@ export function formatMoney(value: number | string | null | undefined): string |
   });
 }
 
+// LP is always an integer — use this for chart axis labels where space is tight.
+export function formatLpInt(value: number | string | null | undefined): string | null {
+  const numeric = toNumeric(value);
+  if (numeric == null) return null;
+  return Math.round(numeric).toLocaleString();
+}
+
 export function formatShares(value: number | string | null | undefined): string | null {
   const numeric = toNumeric(value);
   if (numeric == null) return null;

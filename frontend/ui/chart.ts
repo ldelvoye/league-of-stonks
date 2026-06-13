@@ -2,14 +2,27 @@
 //
 // It positions points along the x-axis by game index (equal spacing per game),
 // renders an area fill, gridlines, a baseline marker and a hover crosshair with
-// a tooltip. Colour follows the trend over the visible window: green when up,
-// red when down.
+// a tooltip. Colour follows the trend over the visible window with a hextech
+// baseline and loss-aware downtrend coloring.
+//
+// When opts.sparkline is true the chart renders as a minimal trend line with no
+// axes, labels, grid, or interactivity — suitable for inline sparklines.
 import type { Snapshot } from "../lib/types.js";
-import { formatAxisDate, formatDate, formatMoney } from "../lib/format.js";
+import { formatAxisDate, formatDate, formatLpInt, formatMoney } from "../lib/format.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const PAD = { top: 18, right: 50, bottom: 26, left: 12 };
+const SPARKLINE_PAD = { top: 1, right: 1, bottom: 1, left: 1 };
+
+const CHART_THEME = {
+  lineDefault: "var(--hex-blue)",
+  lineDown: "var(--down)",
+  fillDefault: "var(--hex-blue)",
+  fillUp: "var(--up)",
+  fillDown: "var(--down)",
+  grid: "var(--border)",
+};
 
 export interface ChartController {
   // Render a new set of points (range change or a freshly loaded player).
@@ -21,10 +34,14 @@ export interface ChartController {
 export interface ChartOptions {
   svg: SVGSVGElement;
   area: HTMLElement;
-  tooltip: HTMLElement;
+  /** Omit when sparkline=true; not used in sparkline mode. */
+  tooltip?: HTMLElement | null;
   // Fires as the cursor moves across the chart so the header can echo the
   // hovered point, and again with null when the cursor leaves.
   onHover?: (point: Snapshot | null) => void;
+  /** Render as a minimal trend line with no axes, labels, grid, or
+   *  interactivity. Suitable for inline sparklines. */
+  sparkline?: boolean;
 }
 
 interface Column {
@@ -120,9 +137,9 @@ function niceNum(range: number, round: boolean): number {
 
 function niceDomain(min: number, max: number, ticks = 4): { lo: number; hi: number; step: number } {
   if (min === max) {
-    const pad = Math.max(20, Math.abs(min) * 0.08);
-    min -= pad;
-    max += pad;
+    const domainPad = Math.max(20, Math.abs(min) * 0.08);
+    min -= domainPad;
+    max += domainPad;
   }
   const step = niceNum((max - min) / Math.max(1, ticks - 1), true);
   const lo = Math.max(0, Math.floor(min / step) * step);
@@ -131,7 +148,11 @@ function niceDomain(min: number, max: number, ticks = 4): { lo: number; hi: numb
 }
 
 export function createChart(opts: ChartOptions): ChartController {
-  const { svg, area, tooltip, onHover } = opts;
+  const { svg, area, onHover } = opts;
+  const tooltip = opts.tooltip ?? null;
+  const sparkline = opts.sparkline ?? false;
+  const pad = sparkline ? SPARKLINE_PAD : PAD;
+  const gradientId = `chart-fill-${Math.random().toString(36).slice(2, 8)}`;
 
   let points: Snapshot[] = [];
   let columns: Column[] = [];
@@ -159,23 +180,32 @@ export function createChart(opts: ChartOptions): ChartController {
     cursorGroup = null;
 
     const scored = points.filter((p) => p.score !== null);
-    svg.dataset.trend = trendOf(scored);
+    const trend = trendOf(scored);
+    svg.dataset.trend = trend;
+    const lineColor = trend === "down" ? CHART_THEME.lineDown : CHART_THEME.lineDefault;
+    const fillColor =
+      trend === "down" ? CHART_THEME.fillDown : trend === "up" ? CHART_THEME.fillUp : CHART_THEME.fillDefault;
+    svg.style.setProperty("--chart-line-color", lineColor);
+    svg.style.setProperty("--chart-fill-color", fillColor);
+    svg.style.setProperty("--chart-grid-color", CHART_THEME.grid);
 
     if (scored.length === 0) {
-      const note = svgEl(
-        "text",
-        { x: width / 2, y: height / 2, "text-anchor": "middle", "dominant-baseline": "middle" },
-        "chart-axis-label",
-      );
-      note.textContent = "No price-per-share data in this range";
-      svg.appendChild(note);
+      if (!sparkline) {
+        const note = svgEl(
+          "text",
+          { x: width / 2, y: height / 2, "text-anchor": "middle", "dominant-baseline": "middle" },
+          "chart-axis-label",
+        );
+        note.textContent = "No price-per-share data in this range";
+        svg.appendChild(note);
+      }
       return;
     }
 
     // Gradient for the area fill; its colour is driven from CSS via the stop
     // classes so it tracks the trend (green/red) alongside the line.
     const defs = svgEl("defs");
-    const gradient = svgEl("linearGradient", { id: "chart-fill", x1: 0, y1: 0, x2: 0, y2: 1 });
+    const gradient = svgEl("linearGradient", { id: gradientId, x1: 0, y1: 0, x2: 0, y2: 1 });
     gradient.appendChild(svgEl("stop", { offset: "0%" }, "chart-fill-top"));
     gradient.appendChild(svgEl("stop", { offset: "100%" }, "chart-fill-bottom"));
     defs.appendChild(gradient);
@@ -191,31 +221,33 @@ export function createChart(opts: ChartOptions): ChartController {
     const scores = scoredWithIndex.map((entry) => entry.snapshot.score as number);
     const { lo, hi, step } = niceDomain(Math.min(...scores), Math.max(...scores));
 
-    const plotW = width - PAD.left - PAD.right;
-    const plotH = height - PAD.top - PAD.bottom;
-    const bottom = PAD.top + plotH;
+    const plotW = width - pad.left - pad.right;
+    const plotH = height - pad.top - pad.bottom;
+    const bottom = pad.top + plotH;
 
     const xOf = (index: number): number =>
-      points.length <= 1 ? PAD.left + plotW / 2 : PAD.left + (index / (points.length - 1)) * plotW;
+      points.length <= 1 ? pad.left + plotW / 2 : pad.left + (index / (points.length - 1)) * plotW;
     const yOf = (score: number): number =>
-      hi === lo ? PAD.top + plotH / 2 : PAD.top + (1 - (score - lo) / (hi - lo)) * plotH;
+      hi === lo ? pad.top + plotH / 2 : pad.top + (1 - (score - lo) / (hi - lo)) * plotH;
 
-    // --- Horizontal gridlines + price labels (right side) ---
-    const grid = svgEl("g");
-    for (let value = lo; value <= hi + step / 2; value += step) {
-      const y = yOf(value);
-      grid.appendChild(
-        svgEl("line", { x1: PAD.left, y1: y, x2: PAD.left + plotW, y2: y }, "chart-grid"),
-      );
-      const label = svgEl(
-        "text",
-        { x: width - PAD.right + 8, y, "dominant-baseline": "middle" },
-        "chart-grid-label",
-      );
-      label.textContent = `${formatMoney(value) ?? "0.00"} LP`;
-      grid.appendChild(label);
+    // --- Horizontal gridlines + price labels (right side) — full chart only ---
+    if (!sparkline) {
+      const grid = svgEl("g");
+      for (let value = lo; value <= hi + step / 2; value += step) {
+        const y = yOf(value);
+        grid.appendChild(
+          svgEl("line", { x1: pad.left, y1: y, x2: pad.left + plotW, y2: y }, "chart-grid"),
+        );
+        const label = svgEl(
+          "text",
+          { x: width - 4, y, "text-anchor": "end", "dominant-baseline": "middle" },
+          "chart-grid-label",
+        );
+        label.textContent = formatLpInt(value) ?? "0";
+        grid.appendChild(label);
+      }
+      svg.appendChild(grid);
     }
-    svg.appendChild(grid);
 
     // --- Area fill + line, split into segments so unranked gaps break cleanly ---
     const segments: Array<Array<{ snapshot: Snapshot; index: number }>> = [];
@@ -262,18 +294,22 @@ export function createChart(opts: ChartOptions): ChartController {
     }
 
     if (areaData) {
-      svg.appendChild(svgEl("path", { d: areaData.trim() }, "chart-area-fill"));
+      svg.appendChild(
+        svgEl("path", { d: areaData.trim(), fill: `url(#${gradientId})` }, "chart-area-fill"),
+      );
     }
 
-    // Baseline: the first scored value in the window, like a stock's "open".
-    const baselineY = yOf(scoredWithIndex[0].snapshot.score as number);
-    svg.appendChild(
-      svgEl(
-        "line",
-        { x1: PAD.left, y1: baselineY, x2: PAD.left + plotW, y2: baselineY },
-        "chart-baseline",
-      ),
-    );
+    // Baseline: the first scored value in the window — full chart only.
+    if (!sparkline) {
+      const baselineY = yOf(scoredWithIndex[0].snapshot.score as number);
+      svg.appendChild(
+        svgEl(
+          "line",
+          { x1: pad.left, y1: baselineY, x2: pad.left + plotW, y2: baselineY },
+          "chart-baseline",
+        ),
+      );
+    }
 
     if (normalLineData) {
       svg.appendChild(svgEl("path", { d: normalLineData.trim() }, "chart-line"));
@@ -282,40 +318,44 @@ export function createChart(opts: ChartOptions): ChartController {
       svg.appendChild(svgEl("path", { d: abnormalLineData.trim() }, "chart-line chart-line-abnormal"));
     }
 
-    // --- X-axis date labels (start / middle / end) ---
-    const axis = svgEl("g");
-    const fractions = width < 520 ? [0, 1] : [0, 0.5, 1];
-    const seen = new Set<number>();
-    for (const f of fractions) {
-      const index = Math.round((points.length - 1) * f);
-      const snapshot = points[index];
-      if (!snapshot || seen.has(index)) continue;
-      seen.add(index);
-      const x = xOf(index);
-      const anchor = f === 0 ? "start" : f === 1 ? "end" : "middle";
-      const label = svgEl(
-        "text",
-        { x, y: height - 8, "text-anchor": anchor },
-        "chart-axis-label",
-      );
-      label.textContent = formatAxisDate(snapshot.recordedAt, spanDays);
-      axis.appendChild(label);
+    // --- X-axis date labels — full chart only ---
+    if (!sparkline) {
+      const axis = svgEl("g");
+      const fractions = width < 520 ? [0, 1] : [0, 0.5, 1];
+      const seen = new Set<number>();
+      for (const f of fractions) {
+        const index = Math.round((points.length - 1) * f);
+        const snapshot = points[index];
+        if (!snapshot || seen.has(index)) continue;
+        seen.add(index);
+        const x = xOf(index);
+        const anchor = f === 0 ? "start" : f === 1 ? "end" : "middle";
+        const label = svgEl(
+          "text",
+          { x, y: height - 8, "text-anchor": anchor },
+          "chart-axis-label",
+        );
+        label.textContent = formatAxisDate(snapshot.recordedAt, spanDays);
+        axis.appendChild(label);
+      }
+      svg.appendChild(axis);
     }
-    svg.appendChild(axis);
 
-    // --- Plotted dots (also the hit targets for hovering) ---
+    // --- Plotted dots (hit targets for hovering) ---
     columns = scoredWithIndex.map(({ snapshot, index }) => ({
       x: xOf(index),
       y: yOf(snapshot.score as number),
       snapshot,
     }));
 
-    // --- Hover crosshair (hidden until the cursor enters) ---
-    cursorGroup = svgEl("g", { visibility: "hidden" });
-    cursorLine = svgEl("line", { x1: 0, y1: PAD.top, x2: 0, y2: bottom }, "chart-cursor-line");
-    cursorDot = svgEl("circle", { r: 4.5, cx: 0, cy: 0 }, "chart-dot");
-    cursorGroup.append(cursorLine, cursorDot);
-    svg.appendChild(cursorGroup);
+    // --- Hover crosshair — full chart only ---
+    if (!sparkline) {
+      cursorGroup = svgEl("g", { visibility: "hidden" });
+      cursorLine = svgEl("line", { x1: 0, y1: pad.top, x2: 0, y2: bottom }, "chart-cursor-line");
+      cursorDot = svgEl("circle", { r: 4.5, cx: 0, cy: 0 }, "chart-dot");
+      cursorGroup.append(cursorLine, cursorDot);
+      svg.appendChild(cursorGroup);
+    }
   }
 
   function nearestColumn(clientX: number): Column | null {
@@ -336,7 +376,7 @@ export function createChart(opts: ChartOptions): ChartController {
   }
 
   function moveCursorTo(column: Column): void {
-    if (!cursorGroup || !cursorLine || !cursorDot) return;
+    if (!cursorGroup || !cursorLine || !cursorDot || !tooltip) return;
     cursorGroup.setAttribute("visibility", "visible");
     cursorLine.setAttribute("x1", String(column.x));
     cursorLine.setAttribute("x2", String(column.x));
@@ -367,7 +407,7 @@ export function createChart(opts: ChartOptions): ChartController {
 
   function hideCursor(): void {
     cursorGroup?.setAttribute("visibility", "hidden");
-    tooltip.hidden = true;
+    if (tooltip) tooltip.hidden = true;
     onHover?.(null);
   }
 
@@ -378,9 +418,11 @@ export function createChart(opts: ChartOptions): ChartController {
     onHover?.(column.snapshot);
   }
 
-  area.addEventListener("pointermove", handlePointer);
-  area.addEventListener("pointerdown", handlePointer);
-  area.addEventListener("pointerleave", hideCursor);
+  if (!sparkline) {
+    area.addEventListener("pointermove", handlePointer);
+    area.addEventListener("pointerdown", handlePointer);
+    area.addEventListener("pointerleave", hideCursor);
+  }
 
   const observer = new ResizeObserver(() => redraw());
   observer.observe(area);
@@ -388,14 +430,16 @@ export function createChart(opts: ChartOptions): ChartController {
   return {
     setData(next: Snapshot[]): void {
       points = next;
-      tooltip.hidden = true;
+      if (tooltip) tooltip.hidden = true;
       redraw();
     },
     destroy(): void {
       observer.disconnect();
-      area.removeEventListener("pointermove", handlePointer);
-      area.removeEventListener("pointerdown", handlePointer);
-      area.removeEventListener("pointerleave", hideCursor);
+      if (!sparkline) {
+        area.removeEventListener("pointermove", handlePointer);
+        area.removeEventListener("pointerdown", handlePointer);
+        area.removeEventListener("pointerleave", hideCursor);
+      }
     },
   };
 }

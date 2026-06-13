@@ -438,7 +438,7 @@ export function PlayerPage() {
           <div className="player-trade-panel">
             {!user ? (
               <p className="player-trade-message">
-                Sign in to buy or sell shares for this player. <Link to="/login">Log in</Link>
+                <Link to="/login">Sign in</Link> to buy or sell shares for this player.
               </p>
             ) : !user.emailVerified ? (
               <p className="player-trade-message">

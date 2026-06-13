@@ -586,6 +586,216 @@ body {
   }
 }
 
+/* ── Market Pulse stats ── */
+.home-stats-grid {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.home-stat-cell {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border-soft);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+
+.home-stat-cell.champion-slot-pulse {
+  height: 40px;
+  border: none;
+}
+
+.home-stat-value {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.home-stat-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-faint);
+}
+
+/* ── Top Performers leaderboard ── */
+.home-leaderboard {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.home-lb-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  background: var(--bg-elev-2);
+  border: 1px solid transparent;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  transition: border-color 0.12s;
+}
+
+.home-lb-row:hover {
+  border-color: var(--border-soft);
+}
+
+.home-lb-rank {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--text-faint);
+  text-align: right;
+}
+
+.home-lb-player {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  text-decoration: none;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.home-lb-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-lb-player:hover .home-lb-name {
+  color: var(--accent);
+}
+
+.home-lb-tag {
+  font-size: 12px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.home-lb-delta {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.home-lb-pct {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+/* ── Recent Trades feed ── */
+.home-trade-feed {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.home-trade-row {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 1px;
+  padding: 7px 10px;
+  background: var(--bg-elev-2);
+  border: 1px solid transparent;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  transition: border-color 0.12s;
+}
+
+.home-trade-row:hover {
+  border-color: var(--border-soft);
+}
+
+.home-trade-side {
+  grid-row: 1 / -1;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 3px 5px;
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+  text-align: center;
+}
+
+.home-trade-side--buy {
+  background: rgba(200, 170, 110, 0.18);
+  color: var(--accent);
+  border: 1px solid rgba(200, 170, 110, 0.35);
+}
+
+.home-trade-side--sell {
+  background: rgba(232, 64, 87, 0.14);
+  color: #ff97a8;
+  border: 1px solid rgba(232, 64, 87, 0.35);
+}
+
+.home-trade-player {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  text-decoration: none;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.home-trade-player:hover {
+  color: var(--accent);
+}
+
+.home-trade-tag {
+  font-size: 11px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.home-trade-meta {
+  grid-column: 3;
+  grid-row: 1;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.home-trade-time {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.home-panel-empty {
+  margin: 16px 0 4px;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
 code {
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 0.9em;

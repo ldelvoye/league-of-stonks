@@ -5,10 +5,13 @@ import type {
   ApiResult,
   AuthUser,
   ExecuteTradeResult,
+  MarketStats,
   PortfolioSnapshot,
   PortfolioTradeSide,
   PlayerHistory,
   ProfileChangeStatus,
+  RecentTrade,
+  TopPerformer,
 } from "./types.js";
 
 function apiBaseUrl(): string {
@@ -80,6 +83,10 @@ function portfolioPath(suffix = ""): string {
   return `${API_BASE_URL}/api/portfolio${suffix}`;
 }
 
+function marketPath(suffix = ""): string {
+  return `${API_BASE_URL}/api/market${suffix}`;
+}
+
 export const getScoreAndHistory = (
   gameName: string,
   tagLine: string,
@@ -149,6 +156,15 @@ export const executeTrade = (
     side,
     shares,
   });
+
+export const getMarketStats = () =>
+  apiGet<MarketStats>(marketPath("/stats"));
+
+export const getTopPerformers = ({ limit = 10, windowDays = 30 }: { limit?: number; windowDays?: number } = {}) =>
+  apiGet<TopPerformer[]>(marketPath(`/top?limit=${limit}&window=${windowDays}`));
+
+export const getRecentTrades = ({ limit = 20 }: { limit?: number } = {}) =>
+  apiGet<RecentTrade[]>(marketPath(`/recent-trades?limit=${limit}`));
 
 export function authErrorMessage(status: number, data: ApiErrorBody | null): string {
   if (data?.error) return data.error;

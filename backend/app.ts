@@ -3,6 +3,7 @@ import healthRouter from "./routes/health.js";
 import playerRouter from "./routes/player.js";
 import authRouter from "./routes/auth.js";
 import portfolioRouter from "./routes/portfolio.js";
+import marketRouter from "./routes/market.js";
 
 export function createApp() {
   const app = express();
@@ -43,6 +44,7 @@ export function createApp() {
   app.use("/api/auth", authRouter);
   app.use("/api/player", playerRouter);
   app.use("/api/portfolio", portfolioRouter);
+  app.use("/api/market", marketRouter);
 
   return app;
 }

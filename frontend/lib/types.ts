@@ -92,3 +92,29 @@ export interface ExecuteTradeResult {
   trade: PortfolioTrade;
   portfolio: PortfolioSnapshot;
 }
+
+export interface TopPerformer {
+  gameName: string;
+  tagLine: string;
+  currentScore: number;
+  baselineScore: number;
+  deltaLp: number;
+  deltaPct: number | null;
+}
+
+export interface RecentTrade {
+  tradeId: number;
+  gameName: string;
+  tagLine: string;
+  side: "buy" | "sell";
+  shares: string;
+  pricePerShare: string;
+  totalValue: string;
+  executedAt: string;
+}
+
+export interface MarketStats {
+  trackedSummoners: number;
+  totalTrades: number;
+  volume24h: string;
+}

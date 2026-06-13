@@ -5,12 +5,12 @@
   "type": "module",
   "scripts": {
     "build:backend": "tsc",
-    "build:frontend": "tsc -p frontend/tsconfig.json",
+    "build:frontend": "tsc -p frontend/tsconfig.json && vite build --config frontend/vite.config.ts",
     "build": "npm run build:backend && npm run build:frontend",
     "start:backend": "node backend/dist/index.js",
     "local:dev:backend": "tsx backend/index.ts",
-    "local:dev:frontend": "tsc -p frontend/tsconfig.json --watch",
-    "local:start:frontend": "npx serve frontend -l 3001 -s",
+    "local:dev:frontend": "vite --config frontend/vite.config.ts",
+    "local:start:frontend": "vite preview --config frontend/vite.config.ts",
     "dev": "npm run local:dev:backend",
     "db:up": "docker compose up -d db",
     "db:migrate": "tsx backend/db/migrate.ts",
@@ -20,14 +20,21 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.90.5",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "express": "^5.1.0",
     "express-rate-limit": "^8.5.2",
     "pg": "^8.21.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.9.6",
     "resend": "^6.12.4"
   },
   "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/express": "^5.0.6",
     "@types/node": "^25.9.3",
@@ -36,6 +43,7 @@
     "supertest": "^7.2.2",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
+    "vite": "^8.0.16",
     "vitest": "^4.1.8"
   }
 }

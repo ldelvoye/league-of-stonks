@@ -15,6 +15,8 @@ const PAD = { top: 18, right: 50, bottom: 26, left: 12 };
 export interface ChartController {
   // Render a new set of points (range change or a freshly loaded player).
   setData(points: Snapshot[]): void;
+  // Release observers/event listeners when unmounting.
+  destroy(): void;
 }
 
 export interface ChartOptions {
@@ -315,6 +317,12 @@ export function createChart(opts: ChartOptions): ChartController {
       points = next;
       tooltip.hidden = true;
       redraw();
+    },
+    destroy(): void {
+      observer.disconnect();
+      area.removeEventListener("pointermove", handlePointer);
+      area.removeEventListener("pointerdown", handlePointer);
+      area.removeEventListener("pointerleave", hideCursor);
     },
   };
 }

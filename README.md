@@ -3,7 +3,7 @@
 League of Stonks is a TypeScript monorepo with:
 
 - a backend API (`Express` + `Postgres` via Supabase)
-- a frontend static app (plain TS + HTML/CSS, no React/Vite)
+- a frontend SPA (`React` + `Vite` + `React Router`)
 
 Current product scope:
 
@@ -16,10 +16,12 @@ Current product scope:
 - `backend/db/` DB connection, migrations, table access
 - `backend/routes/` HTTP routes
 - `backend/lib/` domain/service logic
-- `frontend/` static UI source (`index.html`, `styles.css`, TS modules)
+- `frontend/src/` React app routes, components, state, and client entrypoint
+- `frontend/lib/` shared frontend API/data/formatting utilities
+- `frontend/` Vite config, static assets, and global styles
 - `scripts/` utility scripts (for example seed scripts)
 - `tsconfig.json` backend TS config (outputs to `backend/dist`)
-- `frontend/tsconfig.json` frontend TS config (outputs to `frontend/dist`)
+- `frontend/tsconfig.json` frontend TS config (type-checks React app)
 
 ## Runtime architecture
 
@@ -47,21 +49,20 @@ Create a `.env` in repo root (or set env vars in Railway):
 ### Production-oriented commands
 
 - `npm run build:backend` compile backend to `backend/dist`
-- `npm run build:frontend` compile frontend TS to `frontend/dist`
+- `npm run build:frontend` type-check and bundle frontend via Vite to `frontend/dist`
 - `npm run build` build both backend and frontend
 - `npm run start:backend` run compiled backend (`backend/dist/index.js`)
 
 ### Local development commands
 
 - `npm run dev` run backend in watch mode via `tsx`
-- `npm run local:dev:frontend` watch-compile frontend TS
-- `npm run local:start:frontend` serve frontend at `http://localhost:3001`
+- `npm run local:dev:frontend` run Vite dev server at `http://localhost:3001`
+- `npm run local:start:frontend` preview the production frontend build
 
 Typical local split workflow:
 
 1. Terminal A: `npm run dev` (backend on `:3000`)
-2. Terminal B: `npm run local:dev:frontend`
-3. Terminal C: `npm run local:start:frontend` (frontend on `:3001`)
+2. Terminal B: `npm run local:dev:frontend` (frontend on `:3001`)
 
 ## Database workflow
 
@@ -85,7 +86,7 @@ Use two Railway services from the same repo.
 
 - Build command: `npm ci && npm run build:frontend`
 - Start command: blank (static hosting)
-- Static root: `frontend` (configured with `Staticfile`)
+- Static root: `frontend/dist` (configured with `Staticfile`)
 - Custom domain: `leagueofstonks.com` / `www.leagueofstonks.com`
 
 ## Conventions for contributors and coding agents

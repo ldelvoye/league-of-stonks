@@ -8,6 +8,10 @@ export interface RiotId {
 export interface Snapshot {
   score: number | null;
   recordedAt: string;
+  matchId?: string | null;
+  source?: "snapshot" | "confirmed" | "estimated";
+  won?: boolean | null;
+  championName?: string | null;
 }
 
 export interface PlayerHistory {

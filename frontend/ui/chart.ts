@@ -1,14 +1,13 @@
 // A dependency-free, stock-style line/area chart drawn with SVG.
 //
-// It positions points along the x-axis by time (so irregular snapshot spacing
-// reads correctly) and renders an area fill, gridlines, a baseline marker and a
-// hover crosshair with a tooltip. Colour follows the trend over the visible
-// window: green when up, red when down.
+// It positions points along the x-axis by game index (equal spacing per game),
+// renders an area fill, gridlines, a baseline marker and a hover crosshair with
+// a tooltip. Colour follows the trend over the visible window: green when up,
+// red when down.
 import type { Snapshot } from "../lib/types.js";
 import { formatAxisDate, formatDate, formatScore } from "../lib/format.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-const DAY = 24 * 60 * 60 * 1000;
 
 const PAD = { top: 18, right: 50, bottom: 26, left: 12 };
 
@@ -49,6 +48,57 @@ function svgEl<K extends keyof SVGElementTagNameMap>(
 
 function timeOf(snapshot: Snapshot): number {
   return new Date(snapshot.recordedAt).getTime();
+}
+
+function median(values: number[]): number | null {
+  const sorted = values.filter((value) => Number.isFinite(value)).sort((a, b) => a - b);
+  if (sorted.length === 0) {
+    return null;
+  }
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+function isMixedSnapshotConfirmedTransition(previous: Snapshot, next: Snapshot): boolean {
+  return (
+    (previous.source === "snapshot" && next.source === "confirmed") ||
+    (previous.source === "confirmed" && next.source === "snapshot")
+  );
+}
+
+function inferAbnormalTransitionDelta(points: Snapshot[]): number {
+  const transitions = points
+    .slice(1)
+    .map((next, index) => ({ previous: points[index], next }))
+    .filter((pair) => pair.previous.score !== null && pair.next.score !== null);
+
+  if (transitions.length === 0) {
+    return 60;
+  }
+
+  const regularDeltas = transitions
+    .filter((pair) => !isMixedSnapshotConfirmedTransition(pair.previous, pair.next))
+    .map((pair) => Math.abs((pair.next.score as number) - (pair.previous.score as number)));
+
+  const fallbackDeltas = transitions.map((pair) =>
+    Math.abs((pair.next.score as number) - (pair.previous.score as number)),
+  );
+  const typicalDelta = median(regularDeltas) ?? median(fallbackDeltas) ?? 20;
+  return Math.max(45, Math.min(140, Math.round(typicalDelta * 2.6)));
+}
+
+function isAbnormalSnapshotTransition(
+  previous: Snapshot,
+  next: Snapshot,
+  abnormalDeltaThreshold: number,
+): boolean {
+  if (previous.score === null || next.score === null) {
+    return false;
+  }
+  if (!isMixedSnapshotConfirmedTransition(previous, next)) {
+    return false;
+  }
+  return Math.abs(next.score - previous.score) >= abnormalDeltaThreshold;
 }
 
 // Round a span to a friendly increment so gridlines land on tidy values.
@@ -131,20 +181,22 @@ export function createChart(opts: ChartOptions): ChartController {
     defs.appendChild(gradient);
     svg.appendChild(defs);
 
-    const times = points.map(timeOf);
-    const tMin = Math.min(...times);
-    const tMax = Math.max(...times);
-    const spanDays = (tMax - tMin) / DAY;
+    const scoredWithIndex = points.flatMap((snapshot, index) =>
+      snapshot.score === null ? [] : [{ snapshot, index }],
+    );
+    const firstTime = timeOf(points[0]);
+    const lastTime = timeOf(points[points.length - 1]);
+    const spanDays = Math.max(0, (lastTime - firstTime) / (24 * 60 * 60 * 1000));
 
-    const scores = scored.map((p) => p.score as number);
+    const scores = scoredWithIndex.map((entry) => entry.snapshot.score as number);
     const { lo, hi, step } = niceDomain(Math.min(...scores), Math.max(...scores));
 
     const plotW = width - PAD.left - PAD.right;
     const plotH = height - PAD.top - PAD.bottom;
     const bottom = PAD.top + plotH;
 
-    const xOf = (t: number): number =>
-      tMax === tMin ? PAD.left + plotW / 2 : PAD.left + ((t - tMin) / (tMax - tMin)) * plotW;
+    const xOf = (index: number): number =>
+      points.length <= 1 ? PAD.left + plotW / 2 : PAD.left + (index / (points.length - 1)) * plotW;
     const yOf = (score: number): number =>
       hi === lo ? PAD.top + plotH / 2 : PAD.top + (1 - (score - lo) / (hi - lo)) * plotH;
 
@@ -166,29 +218,43 @@ export function createChart(opts: ChartOptions): ChartController {
     svg.appendChild(grid);
 
     // --- Area fill + line, split into segments so unranked gaps break cleanly ---
-    const segments: Snapshot[][] = [];
-    let current: Snapshot[] = [];
-    for (const snapshot of points) {
+    const segments: Array<Array<{ snapshot: Snapshot; index: number }>> = [];
+    let current: Array<{ snapshot: Snapshot; index: number }> = [];
+    for (let index = 0; index < points.length; index += 1) {
+      const snapshot = points[index];
       if (snapshot.score === null) {
         if (current.length) segments.push(current);
         current = [];
       } else {
-        current.push(snapshot);
+        current.push({ snapshot, index });
       }
     }
     if (current.length) segments.push(current);
 
+    const abnormalDeltaThreshold = inferAbnormalTransitionDelta(points);
     let areaData = "";
-    let lineData = "";
+    let normalLineData = "";
+    let abnormalLineData = "";
     for (const segment of segments) {
-      const coords = segment.map((s) => ({ x: xOf(timeOf(s)), y: yOf(s.score as number) }));
+      const coords = segment.map(({ snapshot, index }) => ({
+        x: xOf(index),
+        y: yOf(snapshot.score as number),
+        snapshot,
+      }));
       if (coords.length === 1) {
         // A lone point can't form a line; show a short flat tick around it.
         const { x, y } = coords[0];
-        lineData += `M ${x - 6} ${y} L ${x + 6} ${y} `;
+        normalLineData += `M ${x - 6} ${y} L ${x + 6} ${y} `;
       } else {
-        lineData += `M ${coords[0].x} ${coords[0].y} `;
-        for (let i = 1; i < coords.length; i++) lineData += `L ${coords[i].x} ${coords[i].y} `;
+        for (let i = 1; i < coords.length; i += 1) {
+          const prev = coords[i - 1];
+          const next = coords[i];
+          if (isAbnormalSnapshotTransition(prev.snapshot, next.snapshot, abnormalDeltaThreshold)) {
+            abnormalLineData += `M ${prev.x} ${prev.y} L ${next.x} ${next.y} `;
+          } else {
+            normalLineData += `M ${prev.x} ${prev.y} L ${next.x} ${next.y} `;
+          }
+        }
         areaData += `M ${coords[0].x} ${bottom} `;
         for (const c of coords) areaData += `L ${c.x} ${c.y} `;
         areaData += `L ${coords[coords.length - 1].x} ${bottom} Z `;
@@ -200,7 +266,7 @@ export function createChart(opts: ChartOptions): ChartController {
     }
 
     // Baseline: the first scored value in the window, like a stock's "open".
-    const baselineY = yOf(scored[0].score as number);
+    const baselineY = yOf(scoredWithIndex[0].snapshot.score as number);
     svg.appendChild(
       svgEl(
         "line",
@@ -209,8 +275,11 @@ export function createChart(opts: ChartOptions): ChartController {
       ),
     );
 
-    if (lineData) {
-      svg.appendChild(svgEl("path", { d: lineData.trim() }, "chart-line"));
+    if (normalLineData) {
+      svg.appendChild(svgEl("path", { d: normalLineData.trim() }, "chart-line"));
+    }
+    if (abnormalLineData) {
+      svg.appendChild(svgEl("path", { d: abnormalLineData.trim() }, "chart-line chart-line-abnormal"));
     }
 
     // --- X-axis date labels (start / middle / end) ---
@@ -218,24 +287,25 @@ export function createChart(opts: ChartOptions): ChartController {
     const fractions = width < 520 ? [0, 1] : [0, 0.5, 1];
     const seen = new Set<number>();
     for (const f of fractions) {
-      const t = tMin + (tMax - tMin) * f;
-      const x = xOf(t);
-      if (seen.has(Math.round(x))) continue;
-      seen.add(Math.round(x));
+      const index = Math.round((points.length - 1) * f);
+      const snapshot = points[index];
+      if (!snapshot || seen.has(index)) continue;
+      seen.add(index);
+      const x = xOf(index);
       const anchor = f === 0 ? "start" : f === 1 ? "end" : "middle";
       const label = svgEl(
         "text",
         { x, y: height - 8, "text-anchor": anchor },
         "chart-axis-label",
       );
-      label.textContent = formatAxisDate(new Date(t).toISOString(), spanDays);
+      label.textContent = formatAxisDate(snapshot.recordedAt, spanDays);
       axis.appendChild(label);
     }
     svg.appendChild(axis);
 
     // --- Plotted dots (also the hit targets for hovering) ---
-    columns = scored.map((snapshot) => ({
-      x: xOf(timeOf(snapshot)),
+    columns = scoredWithIndex.map(({ snapshot, index }) => ({
+      x: xOf(index),
       y: yOf(snapshot.score as number),
       snapshot,
     }));

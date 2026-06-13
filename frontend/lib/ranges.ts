@@ -1,48 +1,43 @@
-// Time-range filters, the equivalent of the period selectors on a stock chart.
+// Game-count filters, equivalent to stock-chart period selectors.
 import type { Snapshot } from "./types.js";
 
-export type RangeKey = "1D" | "1W" | "1M" | "3M" | "1Y" | "ALL";
+export type RangeKey = "10G" | "25G" | "50G" | "100G" | "ALL";
 
 export interface RangeDef {
   key: RangeKey;
   label: string;
   description: string;
-  ms: number;
+  games: number;
 }
-
-const DAY = 24 * 60 * 60 * 1000;
 
 // Ordered narrowest -> widest. ALL is always last. Every button is always shown,
 // like a stock chart — even when history is short, wider ranges just show all
-// available snapshots.
+// available games.
 export const RANGES: RangeDef[] = [
-  { key: "1D", label: "1D", description: "Past day", ms: DAY },
-  { key: "1W", label: "1W", description: "Past week", ms: 7 * DAY },
-  { key: "1M", label: "1M", description: "Past month", ms: 30 * DAY },
-  { key: "3M", label: "3M", description: "Past 3 months", ms: 90 * DAY },
-  { key: "1Y", label: "1Y", description: "Past year", ms: 365 * DAY },
-  { key: "ALL", label: "All", description: "All time", ms: Infinity },
+  { key: "10G", label: "10G", description: "Last 10 games", games: 10 },
+  { key: "25G", label: "25G", description: "Last 25 games", games: 25 },
+  { key: "50G", label: "50G", description: "Last 50 games", games: 50 },
+  { key: "100G", label: "100G", description: "Last 100 games", games: 100 },
+  { key: "ALL", label: "All", description: "All games", games: Infinity },
 ];
 
 const ALL_RANGE = RANGES[RANGES.length - 1];
-
-function timeOf(snapshot: Snapshot): number {
-  return new Date(snapshot.recordedAt).getTime();
-}
 
 export function rangeByKey(key: RangeKey): RangeDef {
   return RANGES.find((range) => range.key === key) ?? ALL_RANGE;
 }
 
-// History arrives oldest -> newest. The window is measured back from the most
-// recent snapshot, just like a stock chart anchors to "now".
+// History arrives oldest -> newest. Count windows are measured from the newest
+// game backward.
 export function filterByRange(history: Snapshot[], key: RangeKey): Snapshot[] {
   const def = rangeByKey(key);
-  if (history.length === 0 || !Number.isFinite(def.ms)) {
+  if (history.length === 0 || !Number.isFinite(def.games)) {
     return history.slice();
   }
 
-  const latest = timeOf(history[history.length - 1]);
-  const cutoff = latest - def.ms;
-  return history.filter((snapshot) => timeOf(snapshot) >= cutoff);
+  const take = Math.max(1, Math.floor(def.games));
+  if (history.length <= take) {
+    return history.slice();
+  }
+  return history.slice(history.length - take);
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import type { Snapshot } from "../../lib/types";
 import { getScoreAndHistory, scoreErrorMessage } from "../../lib/api";
@@ -25,6 +25,10 @@ class PlayerRequestError extends Error {
   }
 }
 
+const MIN_REFRESH_VISUAL_MS = 700;
+const LOW_CONFIDENCE_TRUSTED_POINTS = 6;
+const LOW_CONFIDENCE_TRUST_RATIO = 0.45;
+
 function firstScored(points: Snapshot[]): Snapshot | null {
   return points.find((point) => point.score !== null) ?? null;
 }
@@ -48,12 +52,15 @@ export function PlayerPage() {
 
   const [range, setRange] = useState<RangeKey>("ALL");
   const [hoveredPoint, setHoveredPoint] = useState<Snapshot | null>(null);
+  const [isRefreshUiBusy, setIsRefreshUiBusy] = useState(false);
+  const queryClient = useQueryClient();
+  const queryKey = useMemo(() => ["player", gameName, tagLine] as const, [gameName, tagLine]);
 
   const playerQuery = useQuery({
-    queryKey: ["player", gameName, tagLine],
+    queryKey,
     enabled: Boolean(gameName && tagLine),
     queryFn: async () => {
-      const result = await getScoreAndHistory(gameName, tagLine);
+      const result = await getScoreAndHistory(gameName, tagLine, 100, { refresh: false });
       if (!result.ok || !result.data) throw new PlayerRequestError(result.status);
       return result.data;
     },
@@ -62,6 +69,19 @@ export function PlayerPage() {
   const data = playerQuery.data ?? null;
   const history = data?.history ?? [];
   const visible = useMemo(() => filterByRange(history, range), [history, range]);
+  const trustedPointCount = useMemo(
+    () => history.filter((point) => point.source === "confirmed" || point.source === "snapshot").length,
+    [history],
+  );
+  const modeledPointCount = useMemo(
+    () => history.filter((point) => point.source === "confirmed" || point.source === "snapshot" || point.source === "estimated").length,
+    [history],
+  );
+  const trustedRatio = modeledPointCount === 0 ? 1 : trustedPointCount / modeledPointCount;
+  const showLowConfidenceHint =
+    modeledPointCount > 0 &&
+    (trustedPointCount < LOW_CONFIDENCE_TRUSTED_POINTS || trustedRatio < LOW_CONFIDENCE_TRUST_RATIO);
+  const confidenceHintId = `data-quality-${gameName}-${tagLine}`.replace(/[^a-zA-Z0-9_-]/g, "-");
 
   const baseline = firstScored(visible);
   const current = hoveredPoint ?? lastScored(visible);
@@ -99,6 +119,31 @@ export function PlayerPage() {
     data ? `${data.gameName}#${data.tagLine} — League of Stonks` : "League of Stonks",
   );
 
+  const handleRefresh = useCallback(async () => {
+    if (isRefreshUiBusy || playerQuery.isRefetching) {
+      return;
+    }
+    setIsRefreshUiBusy(true);
+    const startedAt = Date.now();
+    try {
+      await queryClient.fetchQuery({
+        queryKey,
+        queryFn: async () => {
+          const result = await getScoreAndHistory(gameName, tagLine, 100, { refresh: true });
+          if (!result.ok || !result.data) throw new PlayerRequestError(result.status);
+          return result.data;
+        },
+      });
+    } finally {
+      const elapsed = Date.now() - startedAt;
+      const remaining = Math.max(0, MIN_REFRESH_VISUAL_MS - elapsed);
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
+      setIsRefreshUiBusy(false);
+    }
+  }, [gameName, isRefreshUiBusy, playerQuery.isRefetching, queryClient, queryKey, tagLine]);
+
   const handleHover = useCallback((point: Snapshot | null) => {
     setHoveredPoint(point);
   }, []);
@@ -117,6 +162,7 @@ export function PlayerPage() {
 
   const hasData = history.length > 0;
   const latest = history[history.length - 1] ?? null;
+  const isRefreshBusy = isRefreshUiBusy || playerQuery.isRefetching;
 
   return (
     <section className="player-card">
@@ -124,6 +170,22 @@ export function PlayerPage() {
         <div className="player-id">
           <h2 className="player-name">{data.gameName}</h2>
           <span className="player-tag">#{data.tagLine}</span>
+          {showLowConfidenceHint ? (
+            <span className="data-quality-hint">
+              <button
+                type="button"
+                className="data-quality-hint-btn"
+                aria-label="Data confidence info"
+                aria-describedby={confidenceHintId}
+              >
+                i
+              </button>
+              <span id={confidenceHintId} role="tooltip" className="data-quality-tooltip">
+                This profile has limited confirmed datapoints ({trustedPointCount}/{modeledPointCount}). Refresh
+                after ranked games to improve historical accuracy.
+              </span>
+            </span>
+          ) : null}
         </div>
 
         <div className="player-score">
@@ -138,10 +200,10 @@ export function PlayerPage() {
         </div>
 
         <button
-          className={`btn btn-ghost ${playerQuery.isRefetching ? "is-busy" : ""}`}
+          className={`btn btn-ghost ${isRefreshBusy ? "is-busy" : ""}`}
           type="button"
-          onClick={() => void playerQuery.refetch()}
-          disabled={playerQuery.isRefetching}
+          onClick={() => void handleRefresh()}
+          disabled={isRefreshBusy}
         >
           <span className="refresh-icon" aria-hidden="true">
             <svg
@@ -158,19 +220,19 @@ export function PlayerPage() {
               <path d="M21 3v6h-6" />
             </svg>
           </span>
-          <span className="refresh-label">{playerQuery.isRefetching ? "Refreshing…" : "Refresh"}</span>
+          <span className="refresh-label">{isRefreshBusy ? "Refreshing…" : "Refresh"}</span>
         </button>
       </div>
 
       <div className="player-meta">
-        <span>{history.length === 1 ? "1 snapshot" : `${history.length} snapshots`}</span>
-        <span>{latest ? `Last recorded ${formatDate(latest.recordedAt)}` : ""}</span>
+        <span>{history.length === 1 ? "1 game" : `${history.length} games`}</span>
+        <span>{latest ? `Latest game ${formatDate(latest.recordedAt)}` : ""}</span>
       </div>
 
       <div className="chart">
         {hasData ? (
           <>
-            <div className="range-filters" role="group" aria-label="Time range">
+            <div className="range-filters" role="group" aria-label="Game range">
               {RANGES.map((option) => (
                 <button
                   key={option.key}
@@ -187,7 +249,7 @@ export function PlayerPage() {
             <StockChart points={visible} onHover={handleHover} />
           </>
         ) : (
-          <p className="history-empty">No score history recorded yet.</p>
+          <p className="history-empty">No game history recorded yet.</p>
         )}
       </div>
     </section>

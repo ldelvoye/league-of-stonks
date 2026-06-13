@@ -6,6 +6,8 @@
     "outDir": "backend/dist",
     "rootDir": "backend",
     "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "skipLibCheck": true,
     "esModuleInterop": true
   },

@@ -25,21 +25,22 @@ router.get("/:gameName/:tagLine/history", async (req, res) => {
   res.json(result);
 });
 
-// Get player score and update the player's score in the database
+// Get player score; optional sync/backfill runs when refresh=1
 router.get("/:gameName/:tagLine", async (req, res) => {
   const { gameName, tagLine } = req.params;
   const platform = getPlatform(req);
   const includeHistory = req.query.includeHistory === "1" || req.query.includeHistory === "true";
+  const refresh = req.query.refresh === "1" || req.query.refresh === "true";
   const limit = Math.min(parseInt(req.query.limit as string, 10) || 100, 500);
 
   try {
     if (includeHistory) {
-      const result = await getPlayerScoreAndHistory(gameName, tagLine, platform, { limit });
+      const result = await getPlayerScoreAndHistory(gameName, tagLine, platform, { limit, refresh });
       res.json(result);
       return;
     }
 
-    const score = await getPlayerScore(gameName, tagLine, platform);
+    const score = await getPlayerScore(gameName, tagLine, platform, { refresh });
     res.json({ score });
   } catch (error) {
     if (error instanceof RiotApiError) {

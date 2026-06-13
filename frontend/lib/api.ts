@@ -73,14 +73,15 @@ function authPath(suffix: string): string {
   return `${API_BASE_URL}/api/auth${suffix}`;
 }
 
-export const getHistory = (gameName: string, tagLine: string) =>
-  apiGet<PlayerHistory>(playerPath(gameName, tagLine, "/history"));
-
-export const getScore = (gameName: string, tagLine: string) =>
-  apiGet<{ score: number | null }>(playerPath(gameName, tagLine));
-
-export const getScoreAndHistory = (gameName: string, tagLine: string, limit = 100) =>
-  apiGet<PlayerHistory>(`${playerPath(gameName, tagLine)}?includeHistory=1&limit=${limit}`);
+export const getScoreAndHistory = (
+  gameName: string,
+  tagLine: string,
+  limit = 100,
+  { refresh = false }: { refresh?: boolean } = {},
+) =>
+  apiGet<PlayerHistory>(
+    `${playerPath(gameName, tagLine)}?includeHistory=1&limit=${limit}${refresh ? "&refresh=1" : ""}`,
+  );
 
 export function scoreErrorMessage(status: number): string {
   switch (status) {

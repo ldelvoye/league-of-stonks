@@ -4,6 +4,9 @@ import type {
   ApiErrorBody,
   ApiResult,
   AuthUser,
+  ExecuteTradeResult,
+  PortfolioSnapshot,
+  PortfolioTradeSide,
   PlayerHistory,
   ProfileChangeStatus,
 } from "./types.js";
@@ -73,6 +76,10 @@ function authPath(suffix: string): string {
   return `${API_BASE_URL}/api/auth${suffix}`;
 }
 
+function portfolioPath(suffix = ""): string {
+  return `${API_BASE_URL}/api/portfolio${suffix}`;
+}
+
 export const getScoreAndHistory = (
   gameName: string,
   tagLine: string,
@@ -94,7 +101,7 @@ export function scoreErrorMessage(status: number): string {
     case 0:
       return "Could not reach the server. Check your connection and try again.";
     default:
-      return "Something went wrong while fetching the score. Please try again.";
+      return "Something went wrong while fetching price data. Please try again.";
   }
 }
 
@@ -128,6 +135,21 @@ export const resetPassword = (token: string, password: string) =>
 export const updateAccountProfile = (username: string, email: string, password: string) =>
   apiPost<AuthUser>(authPath("/update-profile"), { username, email, password });
 
+export const getPortfolio = () => apiGet<PortfolioSnapshot>(portfolioPath(), true);
+
+export const executeTrade = (
+  gameName: string,
+  tagLine: string,
+  side: PortfolioTradeSide,
+  shares: string,
+) =>
+  apiPost<ExecuteTradeResult>(portfolioPath("/trades"), {
+    gameName,
+    tagLine,
+    side,
+    shares,
+  });
+
 export function authErrorMessage(status: number, data: ApiErrorBody | null): string {
   if (data?.error) return data.error;
   switch (status) {
@@ -141,5 +163,23 @@ export function authErrorMessage(status: number, data: ApiErrorBody | null): str
       return "Could not reach the server. Check your connection and try again.";
     default:
       return "Something went wrong. Please try again.";
+  }
+}
+
+export function portfolioErrorMessage(status: number, data: ApiErrorBody | null): string {
+  if (data?.error) return data.error;
+  switch (status) {
+    case 401:
+      return "Sign in to access your portfolio.";
+    case 403:
+      return "Verify your email to access your portfolio.";
+    case 404:
+      return "Portfolio data was not found.";
+    case 429:
+      return "Too many requests, please try again shortly.";
+    case 0:
+      return "Could not reach the server. Check your connection and try again.";
+    default:
+      return "Something went wrong with your portfolio request.";
   }
 }

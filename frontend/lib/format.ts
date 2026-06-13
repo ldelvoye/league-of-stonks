@@ -30,6 +30,44 @@ export function formatScore(score: number | null | undefined): string | null {
   return score == null ? null : score.toLocaleString();
 }
 
+export function toNumeric(value: number | string | null | undefined): number | null {
+  if (value == null) return null;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function formatMoney(value: number | string | null | undefined): string | null {
+  const numeric = toNumeric(value);
+  if (numeric == null) return null;
+  return numeric.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+export function formatShares(value: number | string | null | undefined): string | null {
+  const numeric = toNumeric(value);
+  if (numeric == null) return null;
+  if (numeric === 0) return "0";
+  return numeric
+    .toFixed(3)
+    .replace(/0+$/, "")
+    .replace(/\.$/, "");
+}
+
+export function formatSignedMoney(delta: number): string {
+  const magnitude = Math.abs(delta).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  if (delta > 0) return `+${magnitude}`;
+  if (delta < 0) return `\u2212${magnitude}`;
+  return magnitude;
+}
+
 export function formatSignedScore(delta: number): string {
   const magnitude = Math.abs(delta).toLocaleString();
   if (delta > 0) return `+${magnitude}`;

@@ -31,7 +31,7 @@ export function StockChart({ points, onHover }: StockChartProps) {
 
   return (
     <div className="chart-area" ref={areaRef}>
-      <svg className="chart-svg" role="img" aria-label="Score history chart" ref={svgRef} />
+      <svg className="chart-svg" role="img" aria-label="Price per share history chart" ref={svgRef} />
       <div className="chart-tooltip" hidden ref={tooltipRef} />
     </div>
   );

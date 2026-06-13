@@ -67,6 +67,34 @@ export async function findVerificationToken(
   return { tokenId: rows[0].token_id as number, userId: rows[0].user_id as number };
 }
 
+export interface VerificationTokenRecord {
+  tokenId: number;
+  userId: number;
+  usedAt: Date | null;
+  expiresAt: Date;
+}
+
+/** Returns a token row by hash regardless of used/expired state. */
+export async function findVerificationTokenRecord(
+  tokenHash: string,
+): Promise<VerificationTokenRecord | null> {
+  const { rows } = await getPool().query(
+    `SELECT token_id, user_id, used_at, expires_at
+     FROM email_verification_tokens
+     WHERE token_hash = $1
+     LIMIT 1`,
+    [tokenHash],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    tokenId: row.token_id as number,
+    userId: row.user_id as number,
+    usedAt: (row.used_at as Date | null) ?? null,
+    expiresAt: row.expires_at as Date,
+  };
+}
+
 /** Marks the token used and confirms current or pending email atomically. */
 export async function consumeVerificationToken(tokenId: number, userId: number): Promise<void> {
   const client = await getPool().connect();

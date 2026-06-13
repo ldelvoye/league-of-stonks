@@ -1,6 +1,7 @@
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../backend/app.ts";
+import { getPool } from "../../backend/db/index.ts";
 import * as emailLib from "../../backend/lib/email.ts";
 import { resetAuthRateLimitsForTests } from "../../backend/routes/auth.ts";
 import {
@@ -42,6 +43,12 @@ describe("auth routes integration", () => {
     expect(register.status).toBe(201);
     expect(register.body.username).toBe("user1");
     expect(register.body.emailVerified).toBe(false);
+    const portfolioResult = await getPool().query<{ lp_balance: string }>(
+      `SELECT lp_balance FROM portfolios WHERE user_id = $1`,
+      [register.body.userId as number],
+    );
+    expect(portfolioResult.rows).toHaveLength(1);
+    expect(portfolioResult.rows[0].lp_balance).toBe("50000.00");
 
     await waitForCondition(() => sentTokens.length === 1);
     const firstToken = sentTokens[0];
@@ -55,6 +62,9 @@ describe("auth routes integration", () => {
     const verify = await request(app).post("/api/auth/verify-email").send({ token: firstToken });
     expect(verify.status).toBe(200);
     expect(verify.body).toEqual({ ok: true });
+    const verifyAgain = await request(app).post("/api/auth/verify-email").send({ token: firstToken });
+    expect(verifyAgain.status).toBe(200);
+    expect(verifyAgain.body).toEqual({ ok: true });
 
     const meAfter = await agent.get("/api/auth/me");
     expect(meAfter.status).toBe(200);

@@ -5,6 +5,7 @@ import { getPool } from "../db/index.js";
 import {
   consumeVerificationToken,
   createVerificationToken,
+  findVerificationTokenRecord,
   findVerificationToken,
   generateVerificationToken,
   revokePendingVerificationTokens,
@@ -424,6 +425,23 @@ router.post("/verify-email", async (req, res) => {
   const row = await findVerificationToken(tokenHash);
 
   if (!row) {
+    const record = await findVerificationTokenRecord(tokenHash);
+    if (!record) {
+      res.status(400).json({ error: "Invalid or expired verification token" });
+      return;
+    }
+
+    // Treat already-consumed tokens as success when the user is already
+    // verified, so duplicate requests (React Strict Mode, link prefetch, etc.)
+    // don't surface a false invalid-token error.
+    if (record.usedAt) {
+      const user = await findUserById(record.userId);
+      if (user?.emailVerifiedAt) {
+        res.json({ ok: true });
+        return;
+      }
+    }
+
     res.status(400).json({ error: "Invalid or expired verification token" });
     return;
   }

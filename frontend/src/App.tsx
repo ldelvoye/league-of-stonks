@@ -16,6 +16,11 @@ const PlayerPage = lazy(async () => {
   return { default: module.PlayerPage };
 });
 
+const PortfolioPage = lazy(async () => {
+  const module = await import("./routes/PortfolioPage");
+  return { default: module.PortfolioPage };
+});
+
 const AccountPage = lazy(async () => {
   const module = await import("./routes/AccountPage");
   return { default: module.AccountPage };
@@ -165,6 +170,7 @@ export function App() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/player/:gameName/:tagLine" element={<PlayerPage />} />
+            <Route path="/portfolio" element={<PortfolioPage />} />
             <Route path="/account" element={<AccountPage guestMode="login" />} />
             <Route path="/login" element={<AccountPage guestMode="login" />} />
             <Route path="/register" element={<AccountPage guestMode="register" />} />

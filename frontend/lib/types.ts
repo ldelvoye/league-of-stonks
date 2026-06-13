@@ -50,3 +50,45 @@ export interface ProfileChangeStatus {
   username: ProfileFieldChangeStatus;
   email: ProfileFieldChangeStatus;
 }
+
+export type PortfolioTradeSide = "buy" | "sell";
+
+export interface PortfolioPosition {
+  playerId: number;
+  gameName: string;
+  tagLine: string;
+  platform: string;
+  shares: string;
+  avgCost: string;
+  currentPrice: string | null;
+  totalCost: string;
+  marketValue: string | null;
+  unrealizedGain: string | null;
+  unrealizedGainPct: string | null;
+}
+
+export interface PortfolioTrade {
+  tradeId: number;
+  playerId: number;
+  gameName: string;
+  tagLine: string;
+  platform: string;
+  side: PortfolioTradeSide;
+  shares: string;
+  pricePerShare: string;
+  totalValue: string;
+  executedAt: string;
+}
+
+export interface PortfolioSnapshot {
+  portfolioId: number;
+  userId: number;
+  lpBalance: string;
+  positions: PortfolioPosition[];
+  trades: PortfolioTrade[];
+}
+
+export interface ExecuteTradeResult {
+  trade: PortfolioTrade;
+  portfolio: PortfolioSnapshot;
+}

@@ -5,7 +5,7 @@
 // a tooltip. Colour follows the trend over the visible window: green when up,
 // red when down.
 import type { Snapshot } from "../lib/types.js";
-import { formatAxisDate, formatDate, formatScore } from "../lib/format.js";
+import { formatAxisDate, formatDate, formatMoney } from "../lib/format.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -167,7 +167,7 @@ export function createChart(opts: ChartOptions): ChartController {
         { x: width / 2, y: height / 2, "text-anchor": "middle", "dominant-baseline": "middle" },
         "chart-axis-label",
       );
-      note.textContent = "No ranked score in this range";
+      note.textContent = "No price-per-share data in this range";
       svg.appendChild(note);
       return;
     }
@@ -200,7 +200,7 @@ export function createChart(opts: ChartOptions): ChartController {
     const yOf = (score: number): number =>
       hi === lo ? PAD.top + plotH / 2 : PAD.top + (1 - (score - lo) / (hi - lo)) * plotH;
 
-    // --- Horizontal gridlines + score labels (right side) ---
+    // --- Horizontal gridlines + price labels (right side) ---
     const grid = svgEl("g");
     for (let value = lo; value <= hi + step / 2; value += step) {
       const y = yOf(value);
@@ -212,7 +212,7 @@ export function createChart(opts: ChartOptions): ChartController {
         { x: width - PAD.right + 8, y, "dominant-baseline": "middle" },
         "chart-grid-label",
       );
-      label.textContent = formatScore(value);
+      label.textContent = `${formatMoney(value) ?? "0.00"} LP`;
       grid.appendChild(label);
     }
     svg.appendChild(grid);
@@ -347,10 +347,13 @@ export function createChart(opts: ChartOptions): ChartController {
     const date = document.createElement("div");
     date.className = "chart-tooltip-date";
     date.textContent = formatDate(column.snapshot.recordedAt);
-    const score = document.createElement("div");
-    score.className = "chart-tooltip-score";
-    score.textContent = formatScore(column.snapshot.score) ?? "Unranked";
-    tooltip.append(date, score);
+    const price = document.createElement("div");
+    price.className = "chart-tooltip-score";
+    price.textContent =
+      column.snapshot.score == null
+        ? "Unranked"
+        : `${formatMoney(column.snapshot.score) ?? "0.00"} LP`;
+    tooltip.append(date, price);
     tooltip.hidden = false;
 
     const areaWidth = area.clientWidth;

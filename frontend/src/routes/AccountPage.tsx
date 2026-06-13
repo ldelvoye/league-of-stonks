@@ -284,7 +284,7 @@ export function AccountPage({ guestMode }: AccountPageProps) {
         ) : (
           <div>
             <h1 className="auth-title">Create account</h1>
-            <p className="auth-sub">Track summoner scores and build your portfolio.</p>
+            <p className="auth-sub">Track player share prices in LP and build your portfolio.</p>
             <form className="auth-form" autoComplete="on" onSubmit={(event) => void handleRegister(event)}>
               <label className="field">
                 <span className="field-label">Username</span>

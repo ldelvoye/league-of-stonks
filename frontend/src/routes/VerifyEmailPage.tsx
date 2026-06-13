@@ -28,8 +28,9 @@ export function VerifyEmailPage() {
 
   useDocumentTitle("Verify email — League of Stonks");
 
+  const token = searchParams.get("token")?.trim() ?? "";
+
   useEffect(() => {
-    const token = searchParams.get("token")?.trim() ?? "";
     if (!token) {
       setState({ status: "error", message: "Verification token is required." });
       return;
@@ -56,7 +57,7 @@ export function VerifyEmailPage() {
     return () => {
       cancelled = true;
     };
-  }, [refreshSession, searchParams]);
+  }, [refreshSession, token]);
 
   return (
     <section className="auth-card">

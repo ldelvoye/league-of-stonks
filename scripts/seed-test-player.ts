@@ -11,16 +11,21 @@ const TEST_PLAYER = {
 };
 
 const DAYS = 30;
+const MIN_SCORE = 1600;
+const MAX_SCORE = 2400;
+const RANDOM_DELTA_MIN = 15;
+const RANDOM_DELTA_MAX = 75;
+const RANDOM_TICK_OFFSET_MS = 5 * 60 * 1000;
 
 // Deterministic pseudo-random walk so re-seeding produces the same chart.
-function seededScore(dayIndex: number, previous: number): number {
+function seededBaselineScore(dayIndex: number, previous: number): number {
   const wave = Math.sin(dayIndex / 4.5) * 55;
   const drift = dayIndex * 1.8;
   const noise = (((dayIndex * 17 + 3) % 13) - 6) * 12;
   const dip = dayIndex % 9 === 0 ? -35 : 0;
   const raw = 1850 + wave + drift + noise + dip;
   const blended = previous * 0.35 + raw * 0.65;
-  return Math.round(Math.max(1600, Math.min(2400, blended)));
+  return Math.round(Math.max(MIN_SCORE, Math.min(MAX_SCORE, blended)));
 }
 
 function snapshotTimestamp(dayIndex: number): Date {
@@ -29,6 +34,25 @@ function snapshotTimestamp(dayIndex: number): Date {
   // dayIndex 0 = oldest (29 days ago), dayIndex 29 = today.
   date.setDate(date.getDate() - (DAYS - 1 - dayIndex));
   return date;
+}
+
+function randomIntInclusive(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function appendRandomMovement(previous: number): { next: number; delta: number } {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const direction = Math.random() < 0.5 ? -1 : 1;
+    const magnitude = randomIntInclusive(RANDOM_DELTA_MIN, RANDOM_DELTA_MAX);
+    const candidate = Math.max(MIN_SCORE, Math.min(MAX_SCORE, previous + direction * magnitude));
+    if (candidate !== previous) {
+      return { next: candidate, delta: candidate - previous };
+    }
+  }
+
+  // Extremely unlikely fallback if random attempts are clamped at boundaries.
+  const fallback = previous >= MAX_SCORE ? previous - RANDOM_DELTA_MIN : previous + RANDOM_DELTA_MIN;
+  return { next: fallback, delta: fallback - previous };
 }
 
 async function main(): Promise<void> {
@@ -53,7 +77,7 @@ async function main(): Promise<void> {
 
   let previous = 1850;
   for (let day = 0; day < DAYS; day++) {
-    const score = seededScore(day, previous);
+    const score = seededBaselineScore(day, previous);
     previous = score;
     await pool.query(
       `INSERT INTO score_snapshots (player_id, score, recorded_at)
@@ -62,8 +86,19 @@ async function main(): Promise<void> {
     );
   }
 
+  const randomTick = appendRandomMovement(previous);
+  const randomTickTimestamp = new Date(snapshotTimestamp(DAYS - 1).getTime() + RANDOM_TICK_OFFSET_MS);
+  await pool.query(
+    `INSERT INTO score_snapshots (player_id, score, recorded_at)
+     VALUES ($1, $2, $3)`,
+    [playerId, randomTick.next, randomTickTimestamp],
+  );
+
   const riotId = `${TEST_PLAYER.gameName}#${TEST_PLAYER.tagLine}`;
-  console.log(`Seeded ${DAYS} daily snapshots for ${riotId} (${TEST_PLAYER.platform}).`);
+  const deltaText = randomTick.delta > 0 ? `+${randomTick.delta}` : String(randomTick.delta);
+  console.log(
+    `Seeded ${DAYS} baseline daily snapshots for ${riotId} (${TEST_PLAYER.platform}) and appended a random movement tick (${deltaText}).`,
+  );
   console.log(`Open: http://localhost:3000/#/player/${encodeURIComponent(TEST_PLAYER.gameName)}/${encodeURIComponent(TEST_PLAYER.tagLine)}`);
 
   await closeDb();

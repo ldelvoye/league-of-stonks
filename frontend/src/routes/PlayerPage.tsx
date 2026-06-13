@@ -15,6 +15,7 @@ import { filterByRange, RANGES, rangeByKey, type RangeKey } from "../../lib/rang
 import { StatusMessage } from "../components/StatusMessage";
 import { StockChart } from "../components/StockChart";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import { buildExternalProfileLinks } from "../lib/externalProfileLinks";
 
 class PlayerRequestError extends Error {
   readonly status: number;
@@ -163,28 +164,48 @@ export function PlayerPage() {
   const hasData = history.length > 0;
   const latest = history[history.length - 1] ?? null;
   const isRefreshBusy = isRefreshUiBusy || playerQuery.isRefetching;
+  const externalLinks = buildExternalProfileLinks({
+    gameName: data.gameName,
+    tagLine: data.tagLine,
+  });
 
   return (
     <section className="player-card">
       <div className="player-head">
         <div className="player-id">
-          <h2 className="player-name">{data.gameName}</h2>
-          <span className="player-tag">#{data.tagLine}</span>
-          {showLowConfidenceHint ? (
-            <span className="data-quality-hint">
-              <button
-                type="button"
-                className="data-quality-hint-btn"
-                aria-label="Data confidence info"
-                aria-describedby={confidenceHintId}
-              >
-                i
-              </button>
-              <span id={confidenceHintId} role="tooltip" className="data-quality-tooltip">
-                This profile has limited confirmed datapoints ({trustedPointCount}/{modeledPointCount}). Refresh
-                after ranked games to improve historical accuracy.
+          <div className="player-riot-id">
+            <h2 className="player-name">{data.gameName}</h2>
+            <span className="player-tag">#{data.tagLine}</span>
+            {showLowConfidenceHint ? (
+              <span className="data-quality-hint">
+                <button
+                  type="button"
+                  className="data-quality-hint-btn"
+                  aria-label="Data confidence info"
+                  aria-describedby={confidenceHintId}
+                >
+                  i
+                </button>
+                <span id={confidenceHintId} role="tooltip" className="data-quality-tooltip">
+                  This profile has limited confirmed datapoints ({trustedPointCount}/{modeledPointCount}). Refresh
+                  after ranked games to improve historical accuracy.
+                </span>
               </span>
-            </span>
+            ) : null}
+          </div>
+          {externalLinks.opgg || externalLinks.ugg ? (
+            <div className="player-external-links">
+              {externalLinks.opgg ? (
+                <a href={externalLinks.opgg} target="_blank" rel="noopener noreferrer">
+                  op.gg
+                </a>
+              ) : null}
+              {externalLinks.ugg ? (
+                <a href={externalLinks.ugg} target="_blank" rel="noopener noreferrer">
+                  u.gg
+                </a>
+              ) : null}
+            </div>
           ) : null}
         </div>
 

@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config({ quiet: true });
 import { closeDb, getPool, initDb } from "../backend/db/index.js";
+import { runMigrations } from "../backend/db/migrations.js";
 
 const TEST_PLAYER = {
   gameName: "TestStonks",
@@ -32,6 +33,7 @@ function snapshotTimestamp(dayIndex: number): Date {
 
 async function main(): Promise<void> {
   await initDb();
+  await runMigrations();
   const pool = getPool();
 
   const { rows: playerRows } = await pool.query(

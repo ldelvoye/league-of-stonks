@@ -1,5 +1,6 @@
 import { vi } from "vitest";
 import { closeDb, getPool, initDb } from "../../backend/db/index.ts";
+import { runMigrations } from "../../backend/db/migrations.ts";
 
 const LOCAL_DB_URL = "postgresql://postgres:postgres@localhost:5432/league_of_stonks";
 
@@ -27,6 +28,7 @@ export async function initIntegrationDb(): Promise<void> {
   configureIntegrationEnv();
   ensureSafeLocalDatabase(process.env.DATABASE_URL as string);
   await initDb();
+  await runMigrations();
 }
 
 export async function closeIntegrationDb(): Promise<void> {
@@ -37,6 +39,8 @@ export async function closeIntegrationDb(): Promise<void> {
 export async function resetDatabase(): Promise<void> {
   await getPool().query(`
     TRUNCATE TABLE
+      app_meta,
+      password_reset_tokens,
       email_verification_tokens,
       sessions,
       portfolio_trades,

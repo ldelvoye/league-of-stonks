@@ -1,4 +1,4 @@
-import { getPool } from "./index.js";
+import { getPool } from "../index.js";
 
 export interface Session {
   sessionId: number;
@@ -56,6 +56,13 @@ export async function revokeSession(tokenHash: string): Promise<void> {
   await getPool().query(
     `UPDATE sessions SET revoked_at = NOW() WHERE token_hash = $1`,
     [tokenHash],
+  );
+}
+
+export async function revokeSessionsByUserId(userId: number): Promise<void> {
+  await getPool().query(
+    `UPDATE sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`,
+    [userId],
   );
 }
 

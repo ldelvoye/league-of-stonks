@@ -13,7 +13,7 @@ Current product scope:
 ## Repo map
 
 - `backend/` API server and business logic
-- `backend/db/` DB connection, schema, migrations, table access
+- `backend/db/` DB connection, migrations, table access
 - `backend/routes/` HTTP routes
 - `backend/lib/` domain/service logic
 - `frontend/` static UI source (`index.html`, `styles.css`, TS modules)
@@ -67,6 +67,7 @@ Typical local split workflow:
 
 - `npm run db:up` start local Postgres via Docker
 - `npm run db:migrate` apply schema/migrations using current `DATABASE_URL`
+- `npm run db:status` show applied vs pending migrations
 - `npm run db:seed` insert test player history data
 
 ## Deployment (Railway)

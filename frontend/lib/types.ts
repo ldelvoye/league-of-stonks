@@ -23,3 +23,26 @@ export interface ApiResult<T> {
 }
 
 export type MessageVariant = "error" | "loading" | "info";
+
+export interface AuthUser {
+  userId: number;
+  email: string;
+  username: string;
+  emailVerified: boolean;
+  emailVerifiedAt: string | null;
+}
+
+export interface ApiErrorBody {
+  error?: string;
+}
+
+export interface ProfileFieldChangeStatus {
+  allowed: boolean;
+  retryAfterMs: number;
+  message: string | null;
+}
+
+export interface ProfileChangeStatus {
+  username: ProfileFieldChangeStatus;
+  email: ProfileFieldChangeStatus;
+}

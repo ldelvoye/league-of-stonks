@@ -1,8 +1,8 @@
 import { createHash, randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import type { Request, Response, NextFunction } from "express";
-import { findSession } from "../db/sessions.js";
-import { findUserById, type User } from "../db/users.js";
+import { findSession } from "../db/tables/sessions.js";
+import { findUserById, type User } from "../db/tables/users.js";
 
 const SESSION_COOKIE = "les_session";
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -11,14 +11,18 @@ const BCRYPT_ROUNDS = 12;
 export interface AuthenticatedUser {
   userId: number;
   email: string;
+  username: string;
   emailVerified: boolean;
   emailVerifiedAt: string | null;
 }
 
-export function toAuthUser(user: Pick<User, "userId" | "email" | "emailVerifiedAt">): AuthenticatedUser {
+export function toAuthUser(
+  user: Pick<User, "userId" | "email" | "username" | "emailVerifiedAt">,
+): AuthenticatedUser {
   return {
     userId: user.userId,
     email: user.email,
+    username: user.username,
     emailVerified: user.emailVerifiedAt !== null,
     emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
   };

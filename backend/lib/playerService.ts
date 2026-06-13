@@ -1,6 +1,6 @@
-import type { Player } from "../db/players.js";
-import { findPlayerByRiotId, touchPlayer, upsertPlayer } from "../db/players.js";
-import { getScoreHistory, recordScoreSnapshot } from "../db/scores.js";
+import type { Player } from "../db/tables/players.js";
+import { findPlayerByRiotId, touchPlayer, upsertPlayer } from "../db/tables/players.js";
+import { getScoreHistory, recordScoreSnapshot } from "../db/tables/scores.js";
 import { canRefreshPlayer } from "./cooldown.js";
 import { getAccountByRiotId, getLeagueEntriesByPuuid } from "./riot.js";
 import { toSoloRanked } from "./rank.js";
@@ -23,6 +23,22 @@ async function resolvePlayer(
     puuid: account.puuid,
     platform,
   });
+}
+
+async function refreshPlayerScoreIfNeeded(player: Player, platform: string): Promise<number | null> {
+  const [latest] = await getScoreHistory(player.playerId, { limit: 1 });
+  if (!canRefreshPlayer(latest?.recordedAt ?? null)) {
+    return latest?.score ?? null;
+  }
+
+  const ranked = await getLeagueEntriesByPuuid(player.puuid, platform);
+  const soloRanked = toSoloRanked(ranked);
+  const score = soloRanked?.score ?? null;
+
+  await recordScoreSnapshot(player.playerId, score);
+  await touchPlayer(player.playerId);
+
+  return score;
 }
 
 export interface PlayerHistory {
@@ -56,18 +72,22 @@ export async function getPlayerScore(
   platform: string,
 ): Promise<number | null> {
   const player = await resolvePlayer(gameName, tagLine, platform);
+  return refreshPlayerScoreIfNeeded(player, platform);
+}
 
-  const [latest] = await getScoreHistory(player.playerId, { limit: 1 });
-  if (!canRefreshPlayer(latest?.recordedAt ?? null)) {
-    return latest?.score ?? null;
-  }
+export async function getPlayerScoreAndHistory(
+  gameName: string,
+  tagLine: string,
+  platform: string,
+  { limit = 100 }: { limit?: number } = {},
+): Promise<PlayerHistory> {
+  const player = await resolvePlayer(gameName, tagLine, platform);
+  await refreshPlayerScoreIfNeeded(player, platform);
 
-  const ranked = await getLeagueEntriesByPuuid(player.puuid, platform);
-  const soloRanked = toSoloRanked(ranked);
-  const score = soloRanked?.score ?? null;
-
-  await recordScoreSnapshot(player.playerId, score);
-  await touchPlayer(player.playerId);
-
-  return score;
+  const history = await getScoreHistory(player.playerId, { limit });
+  return {
+    gameName: player.gameName,
+    tagLine: player.tagLine,
+    history: history.reverse().map(({ score, recordedAt }) => ({ score, recordedAt })),
+  };
 }

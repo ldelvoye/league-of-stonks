@@ -4,19 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>League of Stonks</title>
-    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <div class="app">
       <header class="site-header">
-        <a class="brand" href="#/" aria-label="League of Stonks home">
+        <a class="brand" href="/" aria-label="League of Stonks home">
           <span class="brand-mark" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 17l5-5 4 4 8-8" />
@@ -40,6 +40,31 @@
           />
           <button id="search-button" class="btn btn-primary" type="submit">Search</button>
         </form>
+
+        <a
+          id="auth-avatar-button"
+          class="auth-avatar"
+          href="/account"
+          aria-label="Account"
+        >
+          <svg
+            id="auth-avatar-icon"
+            class="auth-avatar-icon"
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="8" r="4" />
+            <path d="M5 20c0-4 3.5-6 7-6s7 2 7 6" />
+          </svg>
+          <span id="auth-avatar-initials" class="auth-avatar-initials"></span>
+        </a>
       </header>
 
       <main class="content">
@@ -57,6 +82,325 @@
           <p class="welcome-hint">
             Enter a Riot ID in the format
             <code>GameName#TagLine</code>.
+          </p>
+        </section>
+
+        <!-- Account: log in, register, or signed-in profile -->
+        <section id="account-view" class="auth-card auth-card--wide" hidden>
+          <div id="account-guest-login">
+            <h1 class="auth-title">Log in</h1>
+            <p class="auth-sub">Sign in to your League of Stonks account.</p>
+            <form id="login-form" class="auth-form" autocomplete="on">
+              <label class="field">
+                <span class="field-label">Email or username</span>
+                <input
+                  id="login-identifier"
+                  class="field-input"
+                  type="text"
+                  name="identifier"
+                  autocomplete="username"
+                  required
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">Password</span>
+                <input
+                  id="login-password"
+                  class="field-input"
+                  type="password"
+                  name="password"
+                  autocomplete="current-password"
+                  minlength="8"
+                  required
+                />
+              </label>
+              <button id="login-submit" class="btn btn-primary auth-submit" type="submit">
+                Log in
+              </button>
+            </form>
+            <button id="show-forgot-password" class="auth-link-btn" type="button">
+              Forgot password?
+            </button>
+            <form id="forgot-password-form" class="auth-form auth-inline-form" hidden>
+              <label class="field">
+                <span class="field-label">Account email</span>
+                <input
+                  id="forgot-password-email"
+                  class="field-input"
+                  type="email"
+                  name="email"
+                  autocomplete="email"
+                  required
+                />
+              </label>
+              <div class="auth-inline-actions">
+                <button id="forgot-password-submit" class="btn btn-primary" type="submit">
+                  Send reset link
+                </button>
+                <button id="forgot-password-cancel" class="btn btn-ghost" type="button">
+                  Cancel
+                </button>
+              </div>
+            </form>
+            <p class="auth-switch">
+              No account?
+              <button id="show-register" class="auth-switch-btn" type="button">Create one</button>
+            </p>
+          </div>
+
+          <div id="account-guest-register" hidden>
+            <h1 class="auth-title">Create account</h1>
+            <p class="auth-sub">Track summoner scores and build your portfolio.</p>
+            <form id="register-form" class="auth-form" autocomplete="on">
+              <label class="field">
+                <span class="field-label">Username</span>
+                <input
+                  id="register-username"
+                  class="field-input"
+                  type="text"
+                  name="username"
+                  autocomplete="username"
+                  minlength="3"
+                  maxlength="32"
+                  pattern="[A-Za-z0-9_]+"
+                  required
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">Email</span>
+                <input
+                  id="register-email"
+                  class="field-input"
+                  type="email"
+                  name="email"
+                  autocomplete="email"
+                  required
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">Password</span>
+                <input
+                  id="register-password"
+                  class="field-input"
+                  type="password"
+                  name="password"
+                  autocomplete="new-password"
+                  minlength="8"
+                  required
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">Confirm password</span>
+                <input
+                  id="register-password-confirm"
+                  class="field-input"
+                  type="password"
+                  name="passwordConfirm"
+                  autocomplete="new-password"
+                  minlength="8"
+                  required
+                />
+                <p
+                  id="register-password-match"
+                  class="field-feedback"
+                  role="status"
+                  aria-live="polite"
+                  hidden
+                ></p>
+              </label>
+              <p class="field-hint">
+                Username: 3-32 letters, numbers, or underscores. Password: at least 8 characters.
+              </p>
+              <button id="register-submit" class="btn btn-primary auth-submit" type="submit">
+                Create account
+              </button>
+            </form>
+            <p class="auth-switch">
+              Already have an account?
+              <button id="show-login" class="auth-switch-btn" type="button">Log in</button>
+            </p>
+          </div>
+
+          <div id="account-signed-in" hidden>
+            <h1 class="auth-title">My account</h1>
+            <p id="account-username-display" class="account-username-display"></p>
+            <div id="account-unverified-prompt" class="account-unverified-prompt" hidden>
+              <p>Your account email is not verified yet.</p>
+              <a href="/welcome">Go to verification page</a>
+            </div>
+            <section class="account-category">
+              <h2 class="account-category-title">Edit profile</h2>
+              <div class="account-action-list">
+                <a id="account-edit-username-link" class="btn btn-ghost account-action-btn" href="/account/username">
+                  Edit username
+                </a>
+                <a id="account-edit-email-link" class="btn btn-ghost account-action-btn" href="/account/email">
+                  Edit email
+                </a>
+                <button id="account-change-password" class="btn btn-ghost account-action-btn" type="button">
+                  Edit password
+                </button>
+              </div>
+            </section>
+            <button id="logout-button" class="btn btn-ghost account-logout" type="button">
+              Log out
+            </button>
+          </div>
+
+          <div id="account-edit-username" hidden>
+            <p class="auth-back">
+              <a href="/account">&larr; Account</a>
+            </p>
+            <h1 class="auth-title">Change username</h1>
+            <p class="auth-sub">Choose a new username for your account.</p>
+            <p id="account-username-warning" class="account-change-warning">
+              Username can only be changed once every 24 hours.
+            </p>
+            <form id="account-username-form" class="auth-form">
+              <label class="field">
+                <span class="field-label">New username</span>
+                <input
+                  id="account-new-username"
+                  class="field-input"
+                  type="text"
+                  name="username"
+                  autocomplete="username"
+                  minlength="3"
+                  maxlength="32"
+                  pattern="[A-Za-z0-9_]+"
+                  required
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">Current password</span>
+                <input
+                  id="account-username-password"
+                  class="field-input"
+                  type="password"
+                  name="password"
+                  autocomplete="current-password"
+                  minlength="8"
+                  required
+                />
+              </label>
+              <p class="field-hint">3–32 characters: letters, numbers, or underscores.</p>
+              <button id="account-username-submit" class="btn btn-primary auth-submit" type="submit">
+                Save username
+              </button>
+            </form>
+          </div>
+
+          <div id="account-edit-email" hidden>
+            <p class="auth-back">
+              <a href="/account">&larr; Account</a>
+            </p>
+            <h1 class="auth-title">Change email</h1>
+            <p class="auth-sub">Enter a new email address. It updates only after you verify it.</p>
+            <p id="account-email-warning" class="account-change-warning">
+              Email can only be changed once every 24 hours.
+            </p>
+            <form id="account-email-form" class="auth-form">
+              <label class="field">
+                <span class="field-label">New email</span>
+                <input
+                  id="account-new-email"
+                  class="field-input"
+                  type="email"
+                  name="email"
+                  autocomplete="email"
+                  required
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">Current password</span>
+                <input
+                  id="account-email-password"
+                  class="field-input"
+                  type="password"
+                  name="password"
+                  autocomplete="current-password"
+                  minlength="8"
+                  required
+                />
+              </label>
+              <button id="account-email-submit" class="btn btn-primary auth-submit" type="submit">
+                Save email
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <!-- Post-registration welcome / verify email -->
+        <section id="welcome-verify-view" class="auth-card welcome-verify-card" hidden>
+          <h1 class="auth-title">Welcome to League of Stonks</h1>
+          <p class="auth-sub">
+            We sent a verification email to
+            <span id="welcome-verify-email" class="welcome-verify-email"></span>.
+            Open the link in that message to activate your account.
+          </p>
+          <p class="welcome-verify-hint">
+            Didn't get it? Check spam, or request a new one below.
+          </p>
+          <button id="welcome-resend-button" class="btn btn-primary auth-submit" type="button">
+            Resend verification email
+          </button>
+          <p class="auth-switch">
+            <a href="/">Continue to home</a>
+          </p>
+        </section>
+
+        <!-- Email verification -->
+        <section id="verify-email-view" class="auth-card" hidden>
+          <h1 class="auth-title">Verify email</h1>
+          <div id="verify-email-status" class="auth-status" role="status" aria-live="polite"></div>
+          <p class="auth-switch">
+            <a href="/">Back to home</a>
+          </p>
+        </section>
+
+        <!-- Password reset -->
+        <section id="reset-password-view" class="auth-card" hidden>
+          <h1 class="auth-title">Reset password</h1>
+          <p class="auth-sub">Choose a new password for your account.</p>
+          <form id="reset-password-form" class="auth-form">
+            <label class="field">
+              <span class="field-label">New password</span>
+              <input
+                id="reset-password"
+                class="field-input"
+                type="password"
+                name="password"
+                autocomplete="new-password"
+                minlength="8"
+                required
+              />
+            </label>
+            <label class="field">
+              <span class="field-label">Confirm new password</span>
+              <input
+                id="reset-password-confirm"
+                class="field-input"
+                type="password"
+                name="passwordConfirm"
+                autocomplete="new-password"
+                minlength="8"
+                required
+              />
+              <p
+                id="reset-password-match"
+                class="field-feedback"
+                role="status"
+                aria-live="polite"
+                hidden
+              ></p>
+            </label>
+            <button id="reset-password-submit" class="btn btn-primary auth-submit" type="submit">
+              Update password
+            </button>
+          </form>
+          <div id="reset-password-status" class="auth-status" role="status" aria-live="polite" hidden></div>
+          <p class="auth-switch">
+            <a href="/login">Back to login</a>
           </p>
         </section>
 
@@ -122,6 +466,15 @@
       </footer>
     </div>
 
-    <script type="module" src="dist/app.js"></script>
+    <div id="toast-popup" class="toast-popup" role="dialog" aria-modal="true" aria-labelledby="toast-popup-message" hidden>
+      <div class="toast-popup-card">
+        <p id="toast-popup-message" class="toast-popup-text">New verification email sent.</p>
+        <button id="toast-popup-dismiss" class="btn btn-primary toast-popup-dismiss" type="button">
+          OK
+        </button>
+      </div>
+    </div>
+
+    <script type="module" src="/dist/app.js"></script>
   </body>
 </html>

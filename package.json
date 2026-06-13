@@ -10,10 +10,11 @@
     "start:backend": "node backend/dist/index.js",
     "local:dev:backend": "tsx backend/index.ts",
     "local:dev:frontend": "tsc -p frontend/tsconfig.json --watch",
-    "local:start:frontend": "npx serve frontend -l 3001",
+    "local:start:frontend": "npx serve frontend -l 3001 -s",
     "dev": "npm run local:dev:backend",
     "db:up": "docker compose up -d db",
     "db:migrate": "tsx backend/db/migrate.ts",
+    "db:status": "tsx backend/db/status.ts",
     "db:seed": "tsx scripts/seed-test-player.ts",
     "test": "vitest run",
     "test:watch": "vitest"

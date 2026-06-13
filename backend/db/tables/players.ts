@@ -1,4 +1,4 @@
-import { getPool } from "./index.js";
+import { getPool } from "../index.js";
 
 export interface Player {
   playerId: number;

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getPlayerHistory, getPlayerScore } from "../lib/playerService.js";
+import { getPlayerHistory, getPlayerScore, getPlayerScoreAndHistory } from "../lib/playerService.js";
 import { getPlatform, RiotApiError } from "../lib/riot.js";
 
 const router = Router();
@@ -29,8 +29,16 @@ router.get("/:gameName/:tagLine/history", async (req, res) => {
 router.get("/:gameName/:tagLine", async (req, res) => {
   const { gameName, tagLine } = req.params;
   const platform = getPlatform(req);
+  const includeHistory = req.query.includeHistory === "1" || req.query.includeHistory === "true";
+  const limit = Math.min(parseInt(req.query.limit as string, 10) || 100, 500);
 
   try {
+    if (includeHistory) {
+      const result = await getPlayerScoreAndHistory(gameName, tagLine, platform, { limit });
+      res.json(result);
+      return;
+    }
+
     const score = await getPlayerScore(gameName, tagLine, platform);
     res.json({ score });
   } catch (error) {

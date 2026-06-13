@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "crypto";
-import { getPool } from "./index.js";
+import { getPool } from "../index.js";
 
 const TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 const TOKEN_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -67,7 +67,7 @@ export async function findVerificationToken(
   return { tokenId: rows[0].token_id as number, userId: rows[0].user_id as number };
 }
 
-/** Marks the token used and sets email_verified_at on the user atomically. */
+/** Marks the token used and confirms current or pending email atomically. */
 export async function consumeVerificationToken(tokenId: number, userId: number): Promise<void> {
   const client = await getPool().connect();
   try {
@@ -77,7 +77,14 @@ export async function consumeVerificationToken(tokenId: number, userId: number):
       [tokenId],
     );
     await client.query(
-      `UPDATE users SET email_verified_at = NOW(), updated_at = NOW() WHERE user_id = $1`,
+      `UPDATE users
+       SET
+         email = COALESCE(pending_email, email),
+         pending_email = NULL,
+         email_change_requested_at = NULL,
+         email_verified_at = NOW(),
+         updated_at = NOW()
+       WHERE user_id = $1`,
       [userId],
     );
     await client.query("COMMIT");

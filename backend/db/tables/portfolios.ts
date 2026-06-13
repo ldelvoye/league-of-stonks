@@ -1,4 +1,4 @@
-import { getPool } from "./index.js";
+import { getPool } from "../index.js";
 
 /** Starting LP granted to new accounts. NUMERIC string to match pg driver output. */
 export const STARTING_LP = "50000.00";

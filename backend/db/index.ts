@@ -1,5 +1,3 @@
-import fs from "fs";
-import path from "path";
 import pg from "pg";
 
 const { Pool } = pg;
@@ -29,12 +27,6 @@ function needsSsl(connectionString: string): boolean {
   }
 }
 
-async function initSchema(database: pg.Pool): Promise<void> {
-  const schemaPath = path.resolve(process.cwd(), "backend/db/schema.sql");
-  const schema = fs.readFileSync(schemaPath, "utf8");
-  await database.query(schema);
-}
-
 export async function initDb(): Promise<pg.Pool> {
   if (pool) {
     return pool;
@@ -45,7 +37,7 @@ export async function initDb(): Promise<pg.Pool> {
     connectionString,
     ssl: needsSsl(connectionString) ? { rejectUnauthorized: false } : false,
   });
-  await initSchema(pool);
+  await pool.query("SELECT 1");
 
   return pool;
 }

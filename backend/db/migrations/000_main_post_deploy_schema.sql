@@ -1,18 +1,3 @@
--- TODO: Remove this block after it has been deployed to production once.
---       All live databases will have been migrated by then and this is dead code.
--- Idempotent migration: rename players.id → player_id for existing databases.
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = current_schema()
-      AND table_name = 'players'
-      AND column_name = 'id'
-  ) THEN
-    ALTER TABLE players RENAME COLUMN id TO player_id;
-  END IF;
-END $$;
-
 CREATE TABLE IF NOT EXISTS players (
   player_id SERIAL PRIMARY KEY,
   game_name TEXT NOT NULL,
@@ -39,7 +24,6 @@ CREATE TABLE IF NOT EXISTS score_snapshots (
 CREATE INDEX IF NOT EXISTS idx_score_snapshots_player_recorded
   ON score_snapshots (player_id, recorded_at DESC);
 
--- App user accounts (distinct from Riot player identities in `players`)
 CREATE TABLE IF NOT EXISTS users (
   user_id SERIAL PRIMARY KEY,
   email TEXT NOT NULL,
@@ -51,7 +35,6 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (LOWER(email));
 
--- Session tokens: only the SHA-256 hash is stored; the raw token lives in the cookie.
 CREATE TABLE IF NOT EXISTS sessions (
   session_id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
@@ -64,7 +47,6 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions (user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions (token_hash);
 
--- Email verification tokens: only the SHA-256 hash is stored; the raw token is emailed.
 CREATE TABLE IF NOT EXISTS email_verification_tokens (
   token_id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
@@ -79,7 +61,6 @@ CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_id
 CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_token_hash
   ON email_verification_tokens (token_hash);
 
--- Portfolios: one per user, created at registration
 CREATE TABLE IF NOT EXISTS portfolios (
   portfolio_id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL UNIQUE REFERENCES users(user_id) ON DELETE CASCADE,
@@ -88,7 +69,6 @@ CREATE TABLE IF NOT EXISTS portfolios (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Portfolio positions: current holdings (updated on each trade)
 CREATE TABLE IF NOT EXISTS portfolio_positions (
   position_id SERIAL PRIMARY KEY,
   portfolio_id INTEGER NOT NULL REFERENCES portfolios(portfolio_id) ON DELETE CASCADE,
@@ -102,7 +82,6 @@ CREATE TABLE IF NOT EXISTS portfolio_positions (
 
 CREATE INDEX IF NOT EXISTS idx_positions_portfolio_id ON portfolio_positions (portfolio_id);
 
--- Portfolio trades: immutable buy/sell ledger
 CREATE TABLE IF NOT EXISTS portfolio_trades (
   trade_id SERIAL PRIMARY KEY,
   portfolio_id INTEGER NOT NULL REFERENCES portfolios(portfolio_id) ON DELETE CASCADE,

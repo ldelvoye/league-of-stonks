@@ -1,6 +1,7 @@
 // Presentation layer: owns the rendered player state and translates data into
 // DOM updates (header, chart, range filters, messages).
 import { els } from "./dom.js";
+import { hideAuthViews } from "./auth.js";
 import { createChart, type ChartController } from "./chart.js";
 import type { MessageVariant, PlayerHistory, Snapshot } from "../lib/types.js";
 import {
@@ -116,6 +117,7 @@ function renderRangeButtons(): void {
 }
 
 export function renderPlayer(data: PlayerHistory): void {
+  hideAuthViews();
   const history = Array.isArray(data.history) ? data.history : [];
   state.history = history;
   state.range = "ALL";
@@ -175,6 +177,7 @@ export function clearMessage(): void {
 }
 
 export function showWelcome(): void {
+  hideAuthViews();
   els.welcome.hidden = false;
   els.player.hidden = true;
   clearMessage();

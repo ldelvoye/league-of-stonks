@@ -1,10 +1,9 @@
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { useDocumentTitle } from "../hooks/useDocumentTitle";
-import { useAuth } from "../state/AuthContext";
-import { getMarketStats, getTopPerformers, getRecentTrades } from "../../lib/api";
-import { formatLpInt, formatShares, formatDate } from "../../lib/format";
-import { buildPlayerRoute } from "../lib/riotId";
+import { useDocumentTitle } from "../hooks/useDocumentTitle.js";
+import { useAuth } from "../state/AuthContext.js";
+import { useMarketStats, useTopPerformers, useRecentTrades } from "../queries/market.js";
+import { formatLpInt, formatShares, formatDate } from "../../lib/format.js";
+import { buildPlayerRoute } from "../lib/riotId.js";
 
 export function HomePage() {
   const { user } = useAuth();
@@ -17,35 +16,9 @@ export function HomePage() {
       ? "Open my portfolio"
       : "Verify email to unlock portfolio";
 
-  const statsQuery = useQuery({
-    queryKey: ["market", "stats"],
-    queryFn: async () => {
-      const result = await getMarketStats();
-      if (!result.ok || !result.data) throw new Error("Failed to load market stats");
-      return result.data;
-    },
-    staleTime: 60_000,
-  });
-
-  const topQuery = useQuery({
-    queryKey: ["market", "top"],
-    queryFn: async () => {
-      const result = await getTopPerformers({ limit: 10, windowDays: 30 });
-      if (!result.ok || !result.data) throw new Error("Failed to load top performers");
-      return result.data;
-    },
-    staleTime: 60_000,
-  });
-
-  const tradesQuery = useQuery({
-    queryKey: ["market", "recent-trades"],
-    queryFn: async () => {
-      const result = await getRecentTrades({ limit: 20 });
-      if (!result.ok || !result.data) throw new Error("Failed to load recent trades");
-      return result.data;
-    },
-    staleTime: 30_000,
-  });
+  const statsQuery = useMarketStats();
+  const topQuery = useTopPerformers({ limit: 10, windowDays: 30 });
+  const tradesQuery = useRecentTrades({ limit: 10 });
 
   return (
     <section className="welcome">
@@ -53,11 +26,12 @@ export function HomePage() {
         <p className="welcome-kicker">Solo Queue Exchange</p>
         <h1 className="welcome-title">Trade the ranked grind of your favorite frauds</h1>
         <p className="welcome-sub">
-          Every LP gain and int-fest is a price movement. Back the believers, short the inters, and build a
-          portfolio of the solo queue degenerates you follow anyway.
+          Every LP gain and int-fest is a price movement. Back the believers, short the inters, and
+          build a portfolio of the solo queue degenerates you follow anyway.
         </p>
         <p className="welcome-hint">
-          Currently tracking NA ranked. More regions incoming — assuming Riot doesn't patch out the suffering.
+          Currently tracking NA ranked. More regions incoming — assuming Riot doesn't patch out the
+          suffering.
         </p>
         <div className="welcome-actions">
           <Link className={portfolioCtaClass} to={portfolioCtaTarget}>
@@ -83,15 +57,21 @@ export function HomePage() {
           ) : (
             <div className="home-stats-grid">
               <div className="home-stat-cell">
-                <span className="home-stat-value">{statsQuery.data.trackedSummoners.toLocaleString()}</span>
+                <span className="home-stat-value">
+                  {statsQuery.data.trackedSummoners.toLocaleString()}
+                </span>
                 <span className="home-stat-label">Summoners tracked</span>
               </div>
               <div className="home-stat-cell">
-                <span className="home-stat-value">{statsQuery.data.totalTrades.toLocaleString()}</span>
+                <span className="home-stat-value">
+                  {statsQuery.data.totalTrades.toLocaleString()}
+                </span>
                 <span className="home-stat-label">All-time trades</span>
               </div>
               <div className="home-stat-cell">
-                <span className="home-stat-value">{formatLpInt(statsQuery.data.volume24h) ?? "0"}</span>
+                <span className="home-stat-value">
+                  {formatLpInt(statsQuery.data.volume24h) ?? "0"}
+                </span>
                 <span className="home-stat-label">LP volume (24 h)</span>
               </div>
             </div>
@@ -117,7 +97,10 @@ export function HomePage() {
           ) : (
             <ol className="home-leaderboard">
               {topQuery.data.map((performer, index) => (
-                <li key={`${performer.gameName}#${performer.tagLine}`} className="home-lb-row">
+                <li
+                  key={`${performer.gameName}#${performer.tagLine}`}
+                  className="home-lb-row"
+                >
                   <span className="home-lb-rank">{index + 1}</span>
                   <Link
                     className="home-lb-player"
@@ -168,7 +151,8 @@ export function HomePage() {
                     <span className="home-trade-tag">#{trade.tagLine}</span>
                   </Link>
                   <span className="home-trade-meta">
-                    {formatShares(trade.shares) ?? "?"} sh @ {formatLpInt(trade.pricePerShare) ?? "?"} LP
+                    {formatShares(trade.shares) ?? "?"} sh @{" "}
+                    {formatLpInt(trade.pricePerShare) ?? "?"} LP
                   </span>
                   <span className="home-trade-time">{formatDate(trade.executedAt)}</span>
                 </li>

@@ -17,6 +17,11 @@ import {
 import { toSoloRanked } from "./rank.js";
 
 const MATCH_SYNC_DEPTH = 10;
+
+// Single-flight map: deduplicate concurrent Riot syncs for the same player.
+// Keyed by normalized platform/gameName/tagLine so even cold-cache concurrent
+// requests collapse before resolvePlayer() reaches Riot account lookup.
+const activePlayerSyncs = new Map<string, Promise<number | null>>();
 const LOBBY_SNAPSHOT_MAX_PLAYERS = 9;
 const DEFAULT_LP_SWING = 20;
 const MIN_LP_SWING = 8;
@@ -41,6 +46,10 @@ interface LpEstimateProfile {
 
 type ScoreHistoryRows = Awaited<ReturnType<typeof getScoreHistory>>;
 type ScoreHistoryRow = ScoreHistoryRows[number];
+
+function playerSyncKey(gameName: string, tagLine: string, platform: string): string {
+  return `${platform.trim().toLowerCase()}:${gameName.trim().toLowerCase()}#${tagLine.trim().toLowerCase()}`;
+}
 
 async function resolvePlayer(
   gameName: string,
@@ -502,6 +511,40 @@ export async function getPlayerHistory(
   return toPlayerHistory(player, history);
 }
 
+interface RefreshPlayerScoreOptions {
+  allowStaleWhileSyncing?: boolean;
+}
+
+async function refreshPlayerScoreDeduped(
+  gameName: string,
+  tagLine: string,
+  platform: string,
+  { allowStaleWhileSyncing = false }: RefreshPlayerScoreOptions = {},
+): Promise<number | null> {
+  const key = playerSyncKey(gameName, tagLine, platform);
+  const existing = activePlayerSyncs.get(key);
+  if (existing) {
+    // Bound request latency during bursts: if a sync is already in-flight and
+    // we have cached data, return it immediately instead of awaiting Riot.
+    if (allowStaleWhileSyncing) {
+      const cached = await getCachedPlayerHistory(gameName, tagLine, platform, 1);
+      if (cached?.history.length) {
+        return cached.history[0].score;
+      }
+    }
+    return existing;
+  }
+
+  const sync = (async () => {
+    const player = await resolvePlayer(gameName, tagLine, platform);
+    return refreshPlayerScoreIfNeeded(player, platform);
+  })().finally(() => {
+    activePlayerSyncs.delete(key);
+  });
+  activePlayerSyncs.set(key, sync);
+  return sync;
+}
+
 export async function getPlayerScore(
   gameName: string,
   tagLine: string,
@@ -515,8 +558,9 @@ export async function getPlayerScore(
     }
   }
 
-  const player = await resolvePlayer(gameName, tagLine, platform);
-  return refreshPlayerScoreIfNeeded(player, platform);
+  return refreshPlayerScoreDeduped(gameName, tagLine, platform, {
+    allowStaleWhileSyncing: refresh,
+  });
 }
 
 export async function getPlayerScoreAndHistory(
@@ -532,8 +576,16 @@ export async function getPlayerScoreAndHistory(
     }
   }
 
+  await refreshPlayerScoreDeduped(gameName, tagLine, platform, {
+    allowStaleWhileSyncing: refresh,
+  });
+
+  const cached = await getCachedPlayerHistory(gameName, tagLine, platform, limit);
+  if (cached) {
+    return toPlayerHistory(cached.player, cached.history);
+  }
+
   const player = await resolvePlayer(gameName, tagLine, platform);
-  await refreshPlayerScoreIfNeeded(player, platform);
   const history = await getScoreHistory(player.playerId, { limit });
   return toPlayerHistory(player, history);
 }

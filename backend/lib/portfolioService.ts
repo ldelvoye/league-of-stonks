@@ -5,6 +5,7 @@ import {
   findPortfolioPosition,
   listPortfolioPositionsWithMarket,
   upsertPortfolioPosition,
+  type SparklinePoint,
 } from "../db/tables/portfolioPositions.js";
 import {
   createPortfolioTrade,
@@ -42,6 +43,7 @@ export interface PortfolioPositionSnapshot {
   marketValue: string | null;
   unrealizedGain: string | null;
   unrealizedGainPct: string | null;
+  sparklineHistory: SparklinePoint[];
 }
 
 export interface PortfolioTradeSnapshot {
@@ -210,6 +212,7 @@ export async function getPortfolioSnapshot(userId: number): Promise<PortfolioSna
       marketValue: position.marketValue,
       unrealizedGain: position.unrealizedGain,
       unrealizedGainPct: position.unrealizedGainPct,
+      sparklineHistory: position.sparklineHistory,
     })),
     trades: trades.map((trade) => ({
       tradeId: trade.tradeId,
@@ -252,7 +255,7 @@ export async function executePortfolioTrade(
       throw new PortfolioServiceError(404, "Portfolio not found");
     }
 
-    const position = await findPortfolioPosition(portfolio.portfolioId, player.playerId, client);
+    const position = await findPortfolioPosition(portfolio.portfolioId, player.playerId, client, { forUpdate: true });
     const totalValue = await multiplyToMoney(client, shares, pricePerShare);
 
     if (side === "buy") {

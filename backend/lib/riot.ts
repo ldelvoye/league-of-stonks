@@ -1,5 +1,7 @@
 import type { Request } from "express";
 import type { LeagueEntry } from "./rank.js";
+import { config } from "./config.js";
+import { logger } from "./logger.js";
 
 const AMERICAS_BASE_URL = "https://americas.api.riotgames.com";
 const RANKED_SOLO_QUEUE_ID = 420;
@@ -11,14 +13,6 @@ export function getPlatform(_req: Request): string {
 
 export function platformBaseUrl(platform: string): string {
   return `https://${platform}.api.riotgames.com`;
-}
-
-function getApiKey(): string {
-  const apiKey = process.env.RIOT_API_KEY;
-  if (!apiKey) {
-    throw new Error("RIOT_API_KEY is not configured");
-  }
-  return apiKey;
 }
 
 export class RiotApiError extends Error {
@@ -36,12 +30,15 @@ export class RiotApiError extends Error {
 }
 
 async function riotFetch<T>(url: string, step: string): Promise<T> {
+  const startMs = Date.now();
+
   const response = await fetch(url, {
     headers: {
-      "X-Riot-Token": getApiKey(),
+      "X-Riot-Token": config.riotApiKey(),
     },
   });
 
+  const latencyMs = Date.now() - startMs;
   const body = await response.text();
   let data: unknown;
   try {
@@ -51,9 +48,15 @@ async function riotFetch<T>(url: string, step: string): Promise<T> {
   }
 
   if (!response.ok) {
+    if (response.status === 429) {
+      logger.warn("riot rate limit", { step, riotStatus: response.status, latencyMs });
+    } else {
+      logger.error("riot api error", { step, riotStatus: response.status, latencyMs });
+    }
     throw new RiotApiError(step, response.status, data);
   }
 
+  logger.info("riot request", { step, riotStatus: response.status, latencyMs });
   return data as T;
 }
 

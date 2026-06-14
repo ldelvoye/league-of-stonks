@@ -1,4 +1,7 @@
 import { getPool } from "../index.js";
+import type { Pool, PoolClient } from "pg";
+
+type Queryable = Pick<Pool | PoolClient, "query">;
 
 export type ScoreSnapshotSource = "snapshot" | "confirmed" | "estimated";
 
@@ -44,18 +47,44 @@ function mapScoreSnapshot(row: Record<string, unknown>): ScoreSnapshot {
   };
 }
 
+// Keeps player_latest_scores in sync after any snapshot write.
+// Only advances the row when the new effective time is >= the stored one, so
+// out-of-order historical inserts do not clobber a more recent score.
+async function syncLatestScore(
+  playerId: number,
+  score: number | null,
+  effectiveAt: Date,
+  source: ScoreSnapshotSource,
+  db: Queryable,
+): Promise<void> {
+  await db.query(
+    `INSERT INTO player_latest_scores (player_id, score, recorded_at, source, updated_at)
+     VALUES ($1, $2, $3, $4, NOW())
+     ON CONFLICT (player_id) DO UPDATE
+       SET score       = EXCLUDED.score,
+           recorded_at = EXCLUDED.recorded_at,
+           source      = EXCLUDED.source,
+           updated_at  = NOW()
+       WHERE player_latest_scores.recorded_at <= EXCLUDED.recorded_at`,
+    [playerId, score, effectiveAt, source],
+  );
+}
+
 export async function recordScoreSnapshot(
   playerId: number,
   score: number | null,
 ): Promise<ScoreSnapshot> {
-  const { rows } = await getPool().query(
+  const db = getPool();
+  const { rows } = await db.query(
     `INSERT INTO score_snapshots (player_id, score, source)
      VALUES ($1, $2, 'snapshot')
      RETURNING ${SCORE_SNAPSHOT_SELECT}`,
     [playerId, score],
   );
 
-  return mapScoreSnapshot(rows[0]);
+  const snap = mapScoreSnapshot(rows[0]);
+  await syncLatestScore(playerId, snap.score, snap.recordedAt, snap.source, db);
+  return snap;
 }
 
 export interface MatchScoreSnapshotInput {
@@ -73,7 +102,8 @@ export async function recordMatchScoreSnapshot(input: MatchScoreSnapshotInput): 
   const { playerId, matchId, score, gameEndedAt, source, won = null, championName = null, queueId = null } =
     input;
 
-  const { rows } = await getPool().query(
+  const db = getPool();
+  const { rows } = await db.query(
     `INSERT INTO score_snapshots (
        player_id,
        score,
@@ -110,7 +140,9 @@ export async function recordMatchScoreSnapshot(input: MatchScoreSnapshotInput): 
     [playerId, score, gameEndedAt, matchId, gameEndedAt, source, won, championName, queueId],
   );
 
-  return mapScoreSnapshot(rows[0]);
+  const snap = mapScoreSnapshot(rows[0]);
+  await syncLatestScore(playerId, snap.score, snap.recordedAt, snap.source, db);
+  return snap;
 }
 
 export async function getLatestConfirmedMatchId(playerId: number): Promise<string | null> {

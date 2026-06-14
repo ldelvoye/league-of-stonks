@@ -327,4 +327,100 @@ describe("player routes integration", () => {
     expect(timeoutLike.status).toBe(500);
     expect(timeoutLike.body.error).toBe("Internal server error");
   });
+
+  it("concurrent refreshes for the same player deduplicate Riot API sync work", async () => {
+    // Seed the player so both concurrent requests resolve to the same player_id,
+    // allowing the in-process single-flight map to kick in.
+    mockRiotFetchWith({
+      matchIdsBody: ["NA1_3", "NA1_2"],
+    });
+    const seeded = await request(app).get("/api/player/Faker/KR1?includeHistory=1&limit=10");
+    expect(seeded.status).toBe(200);
+
+    // Fire two concurrent refreshes. Both use the same unique IP to stay in
+    // the same rate-limit bucket (10/15 min) but far from the limit here.
+    const syncIp = "10.11.12.13";
+    mockRiotFetchWith({
+      matchIdsBody: ["NA1_5", "NA1_4", "NA1_3", "NA1_2"],
+    });
+
+    const [r1, r2] = await Promise.all([
+      request(app).get("/api/player/Faker/KR1?refresh=1").set("X-Forwarded-For", syncIp),
+      request(app).get("/api/player/Faker/KR1?refresh=1").set("X-Forwarded-For", syncIp),
+    ]);
+
+    // Both requests should succeed.
+    expect(r1.status).toBe(200);
+    expect(r2.status).toBe(200);
+
+    // The single-flight map should have coalesced the syncs: match-list and
+    // match-detail calls should appear once for this sync burst.
+    const matchListCalls = countRiotFetchCalls(/\/lol\/match\/v5\/matches\/by-puuid\/.+\/ids/);
+    expect(matchListCalls).toBe(1);
+
+    // Both responses should agree on the latest score.
+    expect(r1.body.score).toBe(r2.body.score);
+  });
+
+  it("cold-cache concurrent refreshes deduplicate before account resolution", async () => {
+    const syncIp = "10.21.22.23";
+    mockRiotFetchWith({
+      accountBody: { puuid: "puuid-cold", gameName: "ColdStart", tagLine: "NA1" },
+      matchIdsBody: ["NA1_12", "NA1_11"],
+    });
+
+    const [r1, r2] = await Promise.all([
+      request(app)
+        .get("/api/player/ColdStart/NA1?includeHistory=1&refresh=1&limit=10")
+        .set("X-Forwarded-For", syncIp),
+      request(app)
+        .get("/api/player/ColdStart/NA1?includeHistory=1&refresh=1&limit=10")
+        .set("X-Forwarded-For", syncIp),
+    ]);
+
+    expect(r1.status).toBe(200);
+    expect(r2.status).toBe(200);
+    expect(countRiotFetchCalls(/\/riot\/account\/v1\/accounts\/by-riot-id\//)).toBe(1);
+    expect(countRiotFetchCalls(/\/lol\/match\/v5\/matches\/by-puuid\/.+\/ids/)).toBe(1);
+    expect(countRiotFetchCalls(/\/lol\/match\/v5\/matches\/NA1_/)).toBe(2);
+  });
+
+  it("rejects invalid player limit query params", async () => {
+    const invalidHistoryLimit = await request(app).get("/api/player/Faker/KR1/history?limit=-5");
+    expect(invalidHistoryLimit.status).toBe(400);
+
+    const invalidScoreLimit = await request(app).get("/api/player/Faker/KR1?includeHistory=1&limit=abc");
+    expect(invalidScoreLimit.status).toBe(400);
+  });
+
+  it("player refresh endpoint enforces per-IP rate limit", async () => {
+    // Use a unique IP so this test does not consume from the shared rate-limit
+    // bucket used by other tests in this suite.
+    const uniqueIp = "10.44.55.66";
+
+    // Seed the player once without refresh so no Riot calls are needed during
+    // the rate-limit probing phase.
+    mockRiotFetchWith({
+      matchIdsBody: ["NA1_3"],
+    });
+    const seeded = await request(app).get("/api/player/Faker/KR1?includeHistory=1&limit=5");
+    expect(seeded.status).toBe(200);
+
+    // Allow up to 10 refresh requests (the configured limit), then expect 429.
+    // Use a mock that throws so we can detect if Riot is called unexpectedly.
+    mockRiotFetchWith({
+      matchIdsBody: ["NA1_3"],
+    });
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 11; i++) {
+      const res = await request(app)
+        .get("/api/player/Faker/KR1?refresh=1")
+        .set("X-Forwarded-For", uniqueIp);
+      statuses.push(res.status);
+    }
+
+    expect(statuses.filter((s) => s === 200).length).toBe(10);
+    expect(statuses[statuses.length - 1]).toBe(429);
+  });
 });

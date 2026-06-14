@@ -2,6 +2,7 @@ import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../backend/app.ts";
 import { getPool } from "../../backend/db/index.ts";
+import { recordScoreSnapshot } from "../../backend/db/tables/scores.ts";
 import * as emailLib from "../../backend/lib/email.ts";
 import {
   TEST_PASSWORD,
@@ -71,12 +72,8 @@ describe("portfolio routes integration", () => {
       [gameName, tagLine, `puuid-${gameName}-${tagLine}`],
     );
     const playerId = inserted.rows[0].player_id;
-
-    await getPool().query(
-      `INSERT INTO score_snapshots (player_id, score, source, recorded_at)
-       VALUES ($1, $2, 'snapshot', NOW())`,
-      [playerId, score],
-    );
+    // Use the application-level function so player_latest_scores stays in sync.
+    await recordScoreSnapshot(playerId, score);
     return playerId;
   }
 
@@ -173,6 +170,18 @@ describe("portfolio routes integration", () => {
        VALUES ($1, $2, 'snapshot', NOW() + INTERVAL '1 minute')`,
       [playerId, 1800],
     );
+    // Sync player_latest_scores to reflect the updated score.
+    await getPool().query(
+      `INSERT INTO player_latest_scores (player_id, score, recorded_at, source, updated_at)
+       VALUES ($1, $2, NOW() + INTERVAL '1 minute', 'snapshot', NOW())
+       ON CONFLICT (player_id) DO UPDATE
+         SET score       = EXCLUDED.score,
+             recorded_at = EXCLUDED.recorded_at,
+             source      = EXCLUDED.source,
+             updated_at  = NOW()
+         WHERE player_latest_scores.recorded_at <= EXCLUDED.recorded_at`,
+      [playerId, 1800],
+    );
 
     const sell = await agent.post("/api/portfolio/trades").send({
       gameName: "SoldPlayer",
@@ -266,5 +275,79 @@ describe("portfolio routes integration", () => {
     });
     expect(buy.status).toBe(400);
     expect(buy.body.error).toContain("cannot be traded");
+  });
+
+  it("concurrent sells cannot oversell shares beyond owned position", async () => {
+    const agent = request.agent(app);
+    await registerAgent(agent, "concurrent_sell_user", "concurrent_sell@example.com");
+    await seedPlayerScore("ConcurrentSellTarget", "NA1", 1000);
+
+    const buy = await agent.post("/api/portfolio/trades").send({
+      gameName: "ConcurrentSellTarget",
+      tagLine: "NA1",
+      side: "buy",
+      shares: "1",
+    });
+    expect(buy.status).toBe(201);
+
+    // Two concurrent sells for 0.75 each (total 1.5) but only 1 share owned.
+    // Exactly one must succeed and one must fail.
+    const [sell1, sell2] = await Promise.all([
+      agent.post("/api/portfolio/trades").send({
+        gameName: "ConcurrentSellTarget",
+        tagLine: "NA1",
+        side: "sell",
+        shares: "0.75",
+      }),
+      agent.post("/api/portfolio/trades").send({
+        gameName: "ConcurrentSellTarget",
+        tagLine: "NA1",
+        side: "sell",
+        shares: "0.75",
+      }),
+    ]);
+
+    const statuses = [sell1.status, sell2.status].sort((a, b) => a - b);
+    expect(statuses).toEqual([201, 400]);
+
+    // One sell of 0.75 shares at 1000 LP went through.
+    // Balance: 50000 - 1000 (buy) + 750 (sell) = 49750.
+    const portfolio = await agent.get("/api/portfolio");
+    expect(portfolio.status).toBe(200);
+    expect(portfolio.body.lpBalance).toBe("49750.00");
+    expect(portfolio.body.positions).toHaveLength(1);
+    expect(portfolio.body.positions[0].shares).toBe("0.250");
+  });
+
+  it("concurrent buys cannot overdraw available balance", async () => {
+    const agent = request.agent(app);
+    await registerAgent(agent, "concurrent_buy_user", "concurrent_buy@example.com");
+    // 40000 LP per share; each buy is within the 50000 balance, but two together are not.
+    await seedPlayerScore("ExpensiveConcurrent", "NA1", 40000);
+
+    const [buy1, buy2] = await Promise.all([
+      agent.post("/api/portfolio/trades").send({
+        gameName: "ExpensiveConcurrent",
+        tagLine: "NA1",
+        side: "buy",
+        shares: "1",
+      }),
+      agent.post("/api/portfolio/trades").send({
+        gameName: "ExpensiveConcurrent",
+        tagLine: "NA1",
+        side: "buy",
+        shares: "1",
+      }),
+    ]);
+
+    const statuses = [buy1.status, buy2.status].sort((a, b) => a - b);
+    expect(statuses).toEqual([201, 400]);
+
+    // Exactly one buy went through: 50000 - 40000 = 10000 remaining.
+    const portfolio = await agent.get("/api/portfolio");
+    expect(portfolio.status).toBe(200);
+    expect(portfolio.body.lpBalance).toBe("10000.00");
+    expect(portfolio.body.positions).toHaveLength(1);
+    expect(portfolio.body.positions[0].shares).toBe("1.000");
   });
 });

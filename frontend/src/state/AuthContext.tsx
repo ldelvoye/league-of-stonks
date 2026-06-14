@@ -2,8 +2,7 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AuthUser } from "../../lib/types";
 import { getMe } from "../../lib/api";
-
-const AUTH_ME_QUERY_KEY = ["auth", "me"] as const;
+import { queryKeys } from "../queries/keys";
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -21,7 +20,7 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const queryClient = useQueryClient();
   const meQuery = useQuery({
-    queryKey: AUTH_ME_QUERY_KEY,
+    queryKey: queryKeys.auth.me(),
     queryFn: async (): Promise<AuthUser | null> => {
       const result = await getMe();
       if (!result.ok || !result.data) return null;
@@ -35,10 +34,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       user: meQuery.data ?? null,
       loading: meQuery.isPending,
       setUser(user) {
-        queryClient.setQueryData(AUTH_ME_QUERY_KEY, user);
+        queryClient.setQueryData(queryKeys.auth.me(), user);
       },
       async refreshSession() {
-        await queryClient.invalidateQueries({ queryKey: AUTH_ME_QUERY_KEY });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.auth.me() });
       },
     }),
     [meQuery.data, meQuery.isPending, queryClient],

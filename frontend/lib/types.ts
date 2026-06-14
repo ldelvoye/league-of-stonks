@@ -24,6 +24,8 @@ export interface ApiResult<T> {
   ok: boolean;
   status: number;
   data: T | null;
+  /** True when the request itself failed (network down, CORS, DNS). status is 0. */
+  networkError?: boolean;
 }
 
 export type MessageVariant = "error" | "loading" | "info";
@@ -65,6 +67,7 @@ export interface PortfolioPosition {
   marketValue: string | null;
   unrealizedGain: string | null;
   unrealizedGainPct: string | null;
+  sparklineHistory: Snapshot[];
 }
 
 export interface PortfolioTrade {

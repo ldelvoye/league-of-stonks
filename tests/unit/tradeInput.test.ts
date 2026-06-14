@@ -1,18 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-if (!("window" in globalThis)) {
-  Object.defineProperty(globalThis, "window", {
-    value: {
-      location: {
-        hostname: "localhost",
-        port: "3001",
-      },
-    },
-    configurable: true,
-  });
-}
-
-const { normalizeSharesInput } = await import("../../frontend/src/routes/PlayerPage.js");
+const { normalizeSharesInput } = await import("../../frontend/src/lib/tradeInput.js");
 
 describe("normalizeSharesInput", () => {
   it("accepts positive whole shares", () => {

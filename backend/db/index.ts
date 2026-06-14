@@ -1,19 +1,13 @@
 import pg from "pg";
+import { config } from "../lib/config.js";
+import { logger } from "../lib/logger.js";
 
 const { Pool } = pg;
 
 let pool: pg.Pool | null = null;
 
-function getConnectionString(): string {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error("DATABASE_URL is not configured");
-  }
-  return connectionString;
-}
-
 function needsSsl(connectionString: string): boolean {
-  if (process.env.NODE_ENV === "production") {
+  if (config.isProduction()) {
     return true;
   }
 
@@ -32,11 +26,27 @@ export async function initDb(): Promise<pg.Pool> {
     return pool;
   }
 
-  const connectionString = getConnectionString();
+  const connectionString = config.databaseUrl();
   pool = new Pool({
     connectionString,
     ssl: needsSsl(connectionString) ? { rejectUnauthorized: false } : false,
+    max: config.dbPoolMax(),
+    idleTimeoutMillis: config.dbIdleTimeoutMs(),
+    connectionTimeoutMillis: config.dbConnectionTimeoutMs(),
+    statement_timeout: config.dbStatementTimeoutMs(),
   });
+
+  pool.on("error", (err) => {
+    logger.error("db idle client error", { message: err.message });
+  });
+
+  pool.on("connect", () => {
+    const { totalCount, idleCount, waitingCount } = pool!;
+    if (waitingCount > 0) {
+      logger.warn("db pool saturation", { totalCount, idleCount, waitingCount });
+    }
+  });
+
   await pool.query("SELECT 1");
 
   return pool;

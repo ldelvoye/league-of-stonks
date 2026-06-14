@@ -16,6 +16,7 @@
     "db:migrate": "tsx backend/db/migrate.ts",
     "db:status": "tsx backend/db/status.ts",
     "db:seed": "tsx scripts/seed-test-player.ts",
+    "scripts:refresh-puuids": "tsx scripts/refresh-player-puuids.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

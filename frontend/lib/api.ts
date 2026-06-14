@@ -14,6 +14,18 @@ import type {
   TopPerformer,
 } from "./types.js";
 
+/**
+ * Thrown by query/mutation functions when a credentialed request receives a
+ * 401. The global QueryCache / MutationCache error handler in main.tsx catches
+ * this and invalidates the auth session so the UI can redirect to /login.
+ */
+export class SessionExpiredError extends Error {
+  constructor() {
+    super("Session expired. Please sign in again.");
+    this.name = "SessionExpiredError";
+  }
+}
+
 function apiBaseUrl(): string {
   const configured = (globalThis as typeof globalThis & { __API_BASE_URL__?: unknown })
     .__API_BASE_URL__;
@@ -53,7 +65,9 @@ async function apiGet<T>(path: string, credentials = false): Promise<ApiResult<T
     const data = await parseJson<T>(response);
     return { ok: response.ok, status: response.status, data };
   } catch {
-    return { ok: false, status: 0, data: null };
+    // TypeError means the fetch itself failed (network down, CORS, DNS).
+    // Preserve this distinction so callers can show a better error message.
+    return { ok: false, status: 0, data: null, networkError: true };
   }
 }
 
@@ -71,7 +85,7 @@ async function apiPost<T>(
     const data = await parseJson<T>(response);
     return { ok: response.ok, status: response.status, data };
   } catch {
-    return { ok: false, status: 0, data: null };
+    return { ok: false, status: 0, data: null, networkError: true };
   }
 }
 

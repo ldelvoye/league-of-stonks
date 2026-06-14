@@ -21,6 +21,15 @@ function envNum(name: string, fallback: number): number {
   return num;
 }
 
+function envBool(name: string, fallback: boolean): boolean {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const normalized = raw.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  throw new ConfigError(`${name} must be a boolean-like value, got: ${JSON.stringify(raw)}`);
+}
+
 /**
  * Validate all required environment variables at startup.
  * Call once in index.ts after dotenv is loaded, before starting the server.
@@ -56,6 +65,9 @@ export const config = {
   // ── Riot API ──────────────────────────────────────────────────────────────
   riotApiKey(): string {
     return required("RIOT_API_KEY");
+  },
+  logVerboseRiotRequests(): boolean {
+    return envBool("LOG_VERBOSE_RIOT_REQUESTS", false);
   },
 
   // ── CORS / origin policy ──────────────────────────────────────────────────

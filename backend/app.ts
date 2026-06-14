@@ -52,18 +52,24 @@ export function createApp() {
   app.use((req, res, next) => {
     const requestId = randomUUID();
     const startMs = Date.now();
+    const requestPath = req.originalUrl;
+    const requestMethod = req.method;
+    const requestIp = req.ip;
     res.locals.requestId = requestId;
+    res.setHeader("X-Request-Id", requestId);
 
     res.on("finish", () => {
       const durationMs = Date.now() - startMs;
       const logFn = res.statusCode >= 500 ? logger.error : logger.info;
+      const statusClass = `${Math.floor(res.statusCode / 100)}xx`;
       logFn("request", {
         requestId,
-        method: req.method,
-        path: req.path,
+        method: requestMethod,
+        path: requestPath,
         status: res.statusCode,
+        statusClass,
         durationMs,
-        ip: req.ip,
+        ip: requestIp,
       });
     });
 
@@ -91,7 +97,7 @@ export function createApp() {
           step: err.step,
           riotStatus: err.status,
           method: req.method,
-          path: req.path,
+          path: req.originalUrl,
         });
       } else {
         logger.error("riot api error", {
@@ -99,7 +105,7 @@ export function createApp() {
           step: err.step,
           riotStatus: err.status,
           method: req.method,
-          path: req.path,
+          path: req.originalUrl,
         });
       }
       res.status(status).json({ error: `${err.step} lookup failed` });
@@ -114,7 +120,7 @@ export function createApp() {
     logger.error("unhandled error", {
       requestId,
       method: req.method,
-      path: req.path,
+      path: req.originalUrl,
       err: err instanceof Error ? { message: err.message, stack: err.stack } : String(err),
     });
 

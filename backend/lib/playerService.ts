@@ -14,6 +14,7 @@ import {
   getRankedSoloMatchIdsByPuuid,
   type RiotMatch,
 } from "./riot.js";
+import { logger } from "./logger.js";
 import { toSoloRanked } from "./rank.js";
 
 const MATCH_SYNC_DEPTH = 10;
@@ -335,10 +336,15 @@ async function resolveCurrentScoreForBackfill(
   return soloRanked?.score ?? null;
 }
 
-async function snapshotLatestLobbyPlayers(match: RiotMatch, targetPlayer: Player, platform: string): Promise<void> {
+async function snapshotLatestLobbyPlayers(
+  match: RiotMatch,
+  targetPlayer: Player,
+  platform: string,
+): Promise<number> {
   const participants = match.info.participants
     .filter((entry) => entry.puuid !== targetPlayer.puuid)
     .slice(0, LOBBY_SNAPSHOT_MAX_PLAYERS);
+  let snapshotsCreated = 0;
 
   for (const participant of participants) {
     if (!participant.riotIdGameName || !participant.riotIdTagline) {
@@ -374,7 +380,10 @@ async function snapshotLatestLobbyPlayers(match: RiotMatch, targetPlayer: Player
       queueId: match.info.queueId,
     });
     await touchPlayer(lobbyPlayer.playerId);
+    snapshotsCreated += 1;
   }
+
+  return snapshotsCreated;
 }
 
 async function recordCurrentLeagueSnapshot(player: Player, platform: string): Promise<number | null> {
@@ -388,6 +397,7 @@ async function recordCurrentLeagueSnapshot(player: Player, platform: string): Pr
 }
 
 async function refreshPlayerScoreIfNeeded(player: Player, platform: string): Promise<number | null> {
+  const syncStartedAt = Date.now();
   const [latest] = await getScoreHistory(player.playerId, { limit: 1 });
   const latestConfirmedMatchId = await getLatestConfirmedMatchId(player.playerId);
   if (shouldSkipSyncForCooldown(latest)) {
@@ -447,7 +457,15 @@ async function refreshPlayerScoreIfNeeded(player: Player, platform: string): Pro
 
   await touchPlayer(player.playerId);
 
-  await snapshotLatestLobbyPlayers(matches[0], player, platform);
+  const lobbySnapshots = await snapshotLatestLobbyPlayers(matches[0], player, platform);
+  logger.info("player sync complete", {
+    playerId: player.playerId,
+    platform,
+    pendingMatches: pendingMatchIds.length,
+    scoreSnapshotsWritten: targetMatchPoints.length,
+    lobbySnapshots,
+    durationMs: Date.now() - syncStartedAt,
+  });
 
   return currentScore;
 }

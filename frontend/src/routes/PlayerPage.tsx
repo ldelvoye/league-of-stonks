@@ -4,12 +4,12 @@ import type { Snapshot } from "../../lib/types.js";
 import { scoreErrorMessage } from "../../lib/api.js";
 import { formatDate } from "../../lib/format.js";
 import { useDocumentTitle } from "../hooks/useDocumentTitle.js";
-import { usePlayerData } from "../hooks/usePlayerData.js";
+import { usePlayerData } from "../features/player/hooks/usePlayerData.js";
 import { buildExternalProfileLinks } from "../lib/externalProfileLinks.js";
 import { useAuth } from "../state/AuthContext.js";
 import { usePortfolioQuery } from "../queries/portfolio.js";
-import { PlayerChartPanel } from "../components/PlayerChartPanel.js";
-import { PlayerTradePanel } from "../components/PlayerTradePanel.js";
+import { PlayerChartPanel } from "../features/player/components/PlayerChartPanel.js";
+import { PlayerTradePanel } from "../features/player/components/PlayerTradePanel.js";
 import { StatusMessage } from "../components/StatusMessage.js";
 import type { RangeKey } from "../../lib/ranges.js";
 

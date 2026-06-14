@@ -161,20 +161,6 @@ export async function refreshLeaderboard(db = getPool()): Promise<void> {
   );
 }
 
-// Refresh interval: 5 minutes keeps the leaderboard fresh without hammering
-// the DB on every request.
-const LEADERBOARD_REFRESH_INTERVAL_MS = Number(
-  process.env.LEADERBOARD_REFRESH_MS ?? 5 * 60 * 1000,
-);
-
-export function scheduleLeaderboardRefresh(): NodeJS.Timeout {
-  return setInterval(() => {
-    refreshLeaderboard().catch((err) =>
-      console.error("[leaderboard] refresh failed", err.message),
-    );
-  }, LEADERBOARD_REFRESH_INTERVAL_MS);
-}
-
 export async function queryRecentTrades(
   { limit = 20 }: { limit?: number } = {},
   db = getPool(),

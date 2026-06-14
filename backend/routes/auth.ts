@@ -43,6 +43,7 @@ import {
 } from "../lib/auth.js";
 import { formatRetryAfter, getProfileChangeCooldown } from "../lib/cooldown.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../lib/email.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 const BASIC_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -276,9 +277,13 @@ router.post("/register", async (req, res) => {
   setSessionCookie(res, token, expiresAt);
 
   // Send verification email; don't block the response on delivery.
-  issueVerificationEmail(userId, normalizedEmail).catch((err) =>
-    console.error("Failed to send verification email:", err),
-  );
+  issueVerificationEmail(userId, normalizedEmail).catch((err) => {
+    logger.error("failed to send verification email", {
+      userId,
+      email: normalizedEmail,
+      err: err instanceof Error ? { message: err.message, stack: err.stack } : String(err),
+    });
+  });
 
   res.status(201).json({
     userId,
@@ -336,9 +341,13 @@ router.post("/forgot-password", async (req, res) => {
 
   const user = await findUserByEmail(normalizedEmail);
   if (user) {
-    issuePasswordResetEmail(user.userId, user.email).catch((err) =>
-      console.error("Failed to send password reset email:", err),
-    );
+    issuePasswordResetEmail(user.userId, user.email).catch((err) => {
+      logger.error("failed to send password reset email", {
+        userId: user.userId,
+        email: user.email,
+        err: err instanceof Error ? { message: err.message, stack: err.stack } : String(err),
+      });
+    });
   }
 
   // Always return success to avoid revealing which emails exist.

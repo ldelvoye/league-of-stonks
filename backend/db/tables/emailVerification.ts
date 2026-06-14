@@ -2,7 +2,6 @@ import { createHash, randomBytes } from "crypto";
 import { getPool } from "../index.js";
 
 const TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
-const TOKEN_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export function generateVerificationToken(): { token: string; hash: string; expiresAt: Date } {
   const token = randomBytes(32).toString("hex");
@@ -129,15 +128,4 @@ export async function purgeExpiredVerificationTokens(): Promise<void> {
   await getPool().query(
     `DELETE FROM email_verification_tokens WHERE expires_at < NOW() OR used_at IS NOT NULL`,
   );
-}
-
-export function scheduleVerificationTokenCleanup(): void {
-  purgeExpiredVerificationTokens().catch((err) =>
-    console.error("Verification token cleanup failed:", err),
-  );
-  setInterval(() => {
-    purgeExpiredVerificationTokens().catch((err) =>
-      console.error("Verification token cleanup failed:", err),
-    );
-  }, TOKEN_CLEANUP_INTERVAL_MS).unref();
 }

@@ -11,7 +11,6 @@ export interface Session {
 
 const SESSION_COLUMNS =
   "session_id, user_id, token_hash, expires_at, created_at, revoked_at";
-const SESSION_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function mapSession(row: Record<string, unknown> | undefined): Session | null {
   if (!row) return null;
@@ -71,16 +70,4 @@ export async function purgeExpiredSessions(): Promise<void> {
   await getPool().query(
     `DELETE FROM sessions WHERE expires_at < NOW() OR revoked_at IS NOT NULL`,
   );
-}
-
-/** Runs purgeExpiredSessions once immediately, then on a 24-hour interval. */
-export function scheduleSessionCleanup(): void {
-  purgeExpiredSessions().catch((err) =>
-    console.error("Session cleanup failed:", err),
-  );
-  setInterval(() => {
-    purgeExpiredSessions().catch((err) =>
-      console.error("Session cleanup failed:", err),
-    );
-  }, SESSION_CLEANUP_INTERVAL_MS).unref();
 }

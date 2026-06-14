@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { usePlayerQuery, useRefreshPlayer } from "../queries/player.js";
+import { usePlayerQuery, useRefreshPlayer } from "../../../queries/player.js";
 
 const MIN_REFRESH_VISUAL_MS = 700;
 

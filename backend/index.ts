@@ -3,10 +3,12 @@ dotenv.config({ quiet: true });
 
 import { createApp } from "./app.js";
 import { closeDb, initDb } from "./db/index.js";
-import { scheduleSessionCleanup } from "./db/tables/sessions.js";
-import { scheduleVerificationTokenCleanup } from "./db/tables/emailVerification.js";
-import { schedulePasswordResetTokenCleanup } from "./db/tables/passwordReset.js";
-import { scheduleLeaderboardRefresh } from "./db/tables/market.js";
+import {
+  schedulePasswordResetTokenCleanup,
+  scheduleSessionCleanup,
+  scheduleVerificationTokenCleanup,
+} from "./jobs/backgroundCleanup.js";
+import { scheduleLeaderboardRefresh } from "./jobs/leaderboardRefresh.js";
 import { config, validateConfig } from "./lib/config.js";
 import { logger } from "./lib/logger.js";
 
@@ -14,9 +16,9 @@ import { logger } from "./lib/logger.js";
 validateConfig();
 
 await initDb();
-scheduleSessionCleanup();
-scheduleVerificationTokenCleanup();
-schedulePasswordResetTokenCleanup();
+const sessionCleanupTimer = scheduleSessionCleanup();
+const verificationCleanupTimer = scheduleVerificationTokenCleanup();
+const passwordResetCleanupTimer = schedulePasswordResetTokenCleanup();
 const leaderboardTimer = scheduleLeaderboardRefresh();
 
 const app = createApp();
@@ -29,8 +31,10 @@ const server = app.listen(port, () => {
 async function shutdown(signal: string): Promise<void> {
   logger.info("shutdown initiated", { signal });
 
-  // Stop the leaderboard refresh loop (session/token cleanup intervals use
-  // .unref() so they do not need explicit clearing).
+  // Stop background maintenance loops.
+  clearInterval(sessionCleanupTimer);
+  clearInterval(verificationCleanupTimer);
+  clearInterval(passwordResetCleanupTimer);
   clearInterval(leaderboardTimer);
 
   // Stop accepting new connections; wait for in-flight requests to complete.

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import type { Snapshot } from "../../lib/types.js";
-import { filterByRange, RANGES, type RangeKey } from "../../lib/ranges.js";
-import { StockChart } from "./StockChart.js";
+import type { Snapshot } from "../../../../lib/types.js";
+import { filterByRange, RANGES, type RangeKey } from "../../../../lib/ranges.js";
+import { StockChart } from "../../../components/StockChart.js";
 
 interface PlayerChartPanelProps {
   history: Snapshot[];

@@ -29,6 +29,10 @@ export class RiotApiError extends Error {
   }
 }
 
+function isHighVolumeStep(step: string): boolean {
+  return step === "match" || step === "league";
+}
+
 async function riotFetch<T>(url: string, step: string): Promise<T> {
   const startMs = Date.now();
 
@@ -56,7 +60,9 @@ async function riotFetch<T>(url: string, step: string): Promise<T> {
     throw new RiotApiError(step, response.status, data);
   }
 
-  logger.info("riot request", { step, riotStatus: response.status, latencyMs });
+  if (!isHighVolumeStep(step) || config.logVerboseRiotRequests()) {
+    logger.info("riot request", { step, riotStatus: response.status, latencyMs });
+  }
   return data as T;
 }
 

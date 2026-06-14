@@ -1,12 +1,12 @@
 import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { executeTrade, portfolioErrorMessage } from "../../lib/api.js";
-import type { AuthUser, PortfolioTradeSide } from "../../lib/types.js";
-import { parseApiErrorBody } from "../queries/portfolio.js";
-import { queryKeys } from "../queries/keys.js";
-import { formatShares } from "../../lib/format.js";
-import { useToast } from "../state/ToastContext.js";
+import { executeTrade, portfolioErrorMessage } from "../../../../lib/api.js";
+import type { AuthUser, PortfolioTradeSide } from "../../../../lib/types.js";
+import { parseApiErrorBody } from "../../../queries/portfolio.js";
+import { queryKeys } from "../../../queries/keys.js";
+import { formatShares } from "../../../../lib/format.js";
+import { useToast } from "../../../state/ToastContext.js";
 
 interface UseExecuteTradeOptions {
   gameName: string;

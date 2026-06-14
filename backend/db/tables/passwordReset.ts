@@ -2,7 +2,6 @@ import { createHash, randomBytes } from "crypto";
 import { getPool } from "../index.js";
 
 const TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
-const TOKEN_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export function generatePasswordResetToken(): { token: string; hash: string; expiresAt: Date } {
   const token = randomBytes(32).toString("hex");
@@ -118,15 +117,4 @@ export async function purgeExpiredPasswordResetTokens(): Promise<void> {
   await getPool().query(
     `DELETE FROM password_reset_tokens WHERE expires_at < NOW() OR used_at IS NOT NULL`,
   );
-}
-
-export function schedulePasswordResetTokenCleanup(): void {
-  purgeExpiredPasswordResetTokens().catch((err) =>
-    console.error("Password reset token cleanup failed:", err),
-  );
-  setInterval(() => {
-    purgeExpiredPasswordResetTokens().catch((err) =>
-      console.error("Password reset token cleanup failed:", err),
-    );
-  }, TOKEN_CLEANUP_INTERVAL_MS).unref();
 }

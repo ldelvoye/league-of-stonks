@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import type { UseQueryResult } from "@tanstack/react-query";
-import type { AuthUser, PortfolioSnapshot, PortfolioTradeSide, Snapshot } from "../../lib/types.js";
+import type { AuthUser, PortfolioSnapshot, PortfolioTradeSide, Snapshot } from "../../../../lib/types.js";
 import {
   formatDate,
   formatMoney,
@@ -11,9 +11,9 @@ import {
   toNumeric,
   trendArrow,
   trendClass,
-} from "../../lib/format.js";
-import { filterByRange, rangeByKey, type RangeKey } from "../../lib/ranges.js";
-import { normalizeSharesInput } from "../lib/tradeInput.js";
+} from "../../../../lib/format.js";
+import { filterByRange, rangeByKey, type RangeKey } from "../../../../lib/ranges.js";
+import { normalizeSharesInput } from "../../../lib/tradeInput.js";
 import { useExecuteTrade } from "../hooks/useExecuteTrade.js";
 
 function firstScored(points: Snapshot[]): Snapshot | null {

@@ -103,16 +103,18 @@ export async function runLeaderboardSync({
 }
 
 /**
- * Syncs a small set of random stale players to grow the database.
+ * Syncs as many random stale players as the current Riot API budget allows,
+ * up to `maxLimit` as a hard safety cap.
  *
  * These syncs are expensive because lobby snapshots can introduce up to 9 new
  * players per match, each of which may receive a league call on their next
- * refresh. The job applies a stricter budget check and reduces the target count
- * when recent Riot traffic is elevated.
+ * refresh. The target count is computed dynamically from the remaining 2-minute
+ * budget so the job automatically backs off when user traffic is elevated and
+ * runs aggressively when the API is quiet.
  */
 export async function runRandomDiscoverySync({
-  limit = 1,
-}: { limit?: number } = {}): Promise<SyncJobResult> {
+  maxLimit = 10,
+}: { maxLimit?: number } = {}): Promise<SyncJobResult> {
   const startMs = Date.now();
   const statsBefore = getRiotUsageStats();
 
@@ -136,17 +138,21 @@ export async function runRandomDiscoverySync({
     };
   }
 
-  // Reduce limit when approaching the budget threshold so we don't overshoot.
+  // Derive how many players we can safely sync from the remaining budget.
+  // Each full discovery sync costs roughly 21 calls in the worst case
+  // (1 match-list + 10 match details + 1 league + 9 lobby league calls),
+  // but averages ~3-5 calls for players who are mostly up to date.
+  // We use 5 as a conservative estimate to stay well within the window.
+  const ESTIMATED_CALLS_PER_PLAYER = 5;
   const remaining = budgetThreshold - statsBefore.last2mTotal;
-  // Each player sync is expected to cost ~3 calls on average for discovery.
-  const estimatedCostPerPlayer = 3;
-  const safeLimit = Math.min(limit, Math.floor(remaining / estimatedCostPerPlayer));
+  const budgetDrivenLimit = Math.floor(remaining / ESTIMATED_CALLS_PER_PLAYER);
+  const safeLimit = Math.min(maxLimit, budgetDrivenLimit);
 
   if (safeLimit <= 0) {
     return {
       mode: "random-discovery",
       selected: 0,
-      skipped: limit,
+      skipped: budgetDrivenLimit < 1 ? 1 : 0,
       synced: 0,
       failed: 0,
       durationMs: Date.now() - startMs,
@@ -191,7 +197,7 @@ export async function runRandomDiscoverySync({
   const result: SyncJobResult = {
     mode: "random-discovery",
     selected: candidates.length,
-    skipped: limit - safeLimit,
+    skipped: Math.max(0, maxLimit - safeLimit),
     synced,
     failed,
     durationMs: Date.now() - startMs,

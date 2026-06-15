@@ -48,14 +48,15 @@ router.post("/riot-history-sync/leaderboard", async (req, res) => {
 /**
  * POST /api/jobs/riot-history-sync/random
  *
- * Refreshes match history for a small set of randomly selected stale players
- * to organically grow the tracked player database. Intended to run on a
- * ~5-minute Railway Cron schedule while the userbase is small.
+ * Syncs as many random stale players as the current Riot budget allows, up to
+ * `maxLimit` (default 10, max 20). The actual number processed is derived from
+ * the remaining 2-minute window budget so the job self-throttles under load.
+ * Intended to run on a ~5-minute Railway Cron schedule.
  * Returns a compact summary suitable for Railway's log viewer.
  */
 router.post("/riot-history-sync/random", async (req, res) => {
-  const limit = parseBoundedPositiveIntQuery(req.query.limit, 1, 5) ?? 1;
-  const result = await runRandomDiscoverySync({ limit });
+  const maxLimit = parseBoundedPositiveIntQuery(req.query.maxLimit, 10, 20) ?? 10;
+  const result = await runRandomDiscoverySync({ maxLimit });
   res.json(result);
 });
 

@@ -128,7 +128,7 @@ describe("jobs routes integration", () => {
     });
 
     const res = await request(app)
-      .post("/api/jobs/riot-history-sync/random?limit=1")
+      .post("/api/jobs/riot-history-sync/random?maxLimit=1")
       .set("Authorization", `Bearer ${TEST_SECRET}`);
 
     expect(res.status).toBe(200);
@@ -188,14 +188,14 @@ describe("jobs routes integration", () => {
     delete process.env.CRON_RIOT_BUDGET_THRESHOLD;
   });
 
-  it("random sync reduces limit when approaching budget threshold", async () => {
+  it("random sync skips all work when budget threshold is reached", async () => {
     process.env.CRON_RIOT_BUDGET_THRESHOLD = "0";
 
     mockRiotFetchWith({ matchIdsBody: ["NA1_1"] });
     await request(app).get("/api/player/Faker/KR1");
 
     const res = await request(app)
-      .post("/api/jobs/riot-history-sync/random?limit=3")
+      .post("/api/jobs/riot-history-sync/random?maxLimit=10")
       .set("Authorization", `Bearer ${TEST_SECRET}`);
 
     expect(res.status).toBe(200);
@@ -223,7 +223,7 @@ describe("jobs routes integration", () => {
     );
 
     const res = await request(app)
-      .post("/api/jobs/riot-history-sync/random?limit=5")
+      .post("/api/jobs/riot-history-sync/random?maxLimit=10")
       .set("Authorization", `Bearer ${TEST_SECRET}`);
 
     expect(res.status).toBe(200);

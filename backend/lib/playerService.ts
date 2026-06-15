@@ -581,6 +581,20 @@ export async function getPlayerScore(
   });
 }
 
+/**
+ * Syncs a player's match history from Riot for use by background cron jobs.
+ * Reuses the existing single-flight dedup so concurrent cron and user requests
+ * for the same player collapse onto one Riot call. The 5-minute cooldown still
+ * applies; callers should pre-select stale players to avoid no-op runs.
+ */
+export async function syncPlayerForCron(
+  gameName: string,
+  tagLine: string,
+  platform: string,
+): Promise<number | null> {
+  return refreshPlayerScoreDeduped(gameName, tagLine, platform);
+}
+
 export async function getPlayerScoreAndHistory(
   gameName: string,
   tagLine: string,

@@ -5,6 +5,7 @@ import playerRouter from "./routes/player.js";
 import authRouter from "./routes/auth.js";
 import portfolioRouter from "./routes/portfolio.js";
 import marketRouter from "./routes/market.js";
+import jobsRouter from "./routes/jobs.js";
 import { RiotApiError } from "./lib/riot.js";
 import { PortfolioServiceError } from "./lib/portfolioService.js";
 import { config } from "./lib/config.js";
@@ -81,6 +82,7 @@ export function createApp() {
   app.use("/api/player", playerRouter);
   app.use("/api/portfolio", portfolioRouter);
   app.use("/api/market", marketRouter);
+  app.use("/api/jobs", jobsRouter);
 
   // Global error handler. Normalizes known domain errors (RiotApiError,
   // PortfolioServiceError) and catches unexpected errors from all routes so

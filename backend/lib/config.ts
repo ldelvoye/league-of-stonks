@@ -69,6 +69,23 @@ export const config = {
   logVerboseRiotRequests(): boolean {
     return envBool("LOG_VERBOSE_RIOT_REQUESTS", false);
   },
+  // Conservative budgets that reserve headroom for bursty user traffic.
+  // Riot limits: 20/1s and 100/2min. We use 18/1s and 90/2min.
+  riotOutboundLimitPerSecond(): number {
+    return envNum("RIOT_OUTBOUND_LIMIT_PER_SECOND", 18);
+  },
+  riotOutboundLimitPer2Min(): number {
+    return envNum("RIOT_OUTBOUND_LIMIT_PER_2MIN", 90);
+  },
+
+  // ── Cron jobs ─────────────────────────────────────────────────────────────
+  cronSecret(): string | null {
+    return process.env.CRON_SECRET ?? null;
+  },
+  // Max Riot calls consumed per 2-minute window before cron reduces/skips work.
+  cronRiotBudgetThreshold(): number {
+    return envNum("CRON_RIOT_BUDGET_THRESHOLD", 60);
+  },
 
   // ── CORS / origin policy ──────────────────────────────────────────────────
   allowedOrigins(): string[] {

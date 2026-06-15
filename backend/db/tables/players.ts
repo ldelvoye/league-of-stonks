@@ -63,3 +63,46 @@ export async function upsertPlayer(player: Omit<Player, "playerId" | "createdAt"
 export async function touchPlayer(playerId: number): Promise<void> {
   await getPool().query(`UPDATE players SET updated_at = NOW() WHERE player_id = $1`, [playerId]);
 }
+
+export interface StaleCandidateRow {
+  playerId: number;
+  gameName: string;
+  tagLine: string;
+  platform: string;
+}
+
+/**
+ * Returns up to `limit` players that have not had a snapshot recorded in the
+ * last 5 minutes, excluding any player IDs in `excludeIds`. Players with no
+ * snapshots at all are prioritised, then results are randomised so repeated
+ * cron runs cycle through the full player pool over time.
+ */
+export async function queryRandomStalePlayers(
+  limit: number,
+  excludeIds: number[] = [],
+  db = getPool(),
+): Promise<StaleCandidateRow[]> {
+  const { rows } = await db.query(
+    `SELECT p.player_id, p.game_name, p.tag_line, p.platform
+     FROM players p
+     LEFT JOIN LATERAL (
+       SELECT recorded_at
+       FROM score_snapshots
+       WHERE player_id = p.player_id
+       ORDER BY recorded_at DESC
+       LIMIT 1
+     ) latest ON true
+     WHERE (cardinality($2::int[]) = 0 OR p.player_id != ALL($2::int[]))
+       AND (latest.recorded_at IS NULL OR latest.recorded_at < NOW() - INTERVAL '5 minutes')
+     ORDER BY RANDOM()
+     LIMIT $1`,
+    [limit, excludeIds],
+  );
+
+  return rows.map((row) => ({
+    playerId: row.player_id as number,
+    gameName: row.game_name as string,
+    tagLine: row.tag_line as string,
+    platform: row.platform as string,
+  }));
+}

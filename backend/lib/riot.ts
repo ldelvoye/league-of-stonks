@@ -6,6 +6,93 @@ import { logger } from "./logger.js";
 const AMERICAS_BASE_URL = "https://americas.api.riotgames.com";
 const RANKED_SOLO_QUEUE_ID = 420;
 
+// ── Outbound rate limiter ─────────────────────────────────────────────────────
+// Tracks timestamps of outbound Riot requests to enforce both API rate windows.
+// Node.js is single-threaded so no mutex is needed; concurrent async paths are
+// serialized by the event loop, making the array safe to read/write without locks.
+
+const SHORT_WINDOW_MS = 1_000;     // 1 second
+const LONG_WINDOW_MS = 2 * 60 * 1_000; // 2 minutes
+const STATS_WINDOW_MS = 15 * 60 * 1_000; // 15 minutes for usage stats
+
+// Timestamps (ms) of every dispatched Riot request within the long window.
+const outboundTimestamps: number[] = [];
+
+interface RequestRecord {
+  ts: number;
+  step: string;
+  was429: boolean;
+}
+// Records of all requests within the stats window for budget queries.
+const requestHistory: RequestRecord[] = [];
+
+function pruneOutboundTimestamps(now: number): void {
+  const cutoff = now - LONG_WINDOW_MS;
+  while (outboundTimestamps.length > 0 && outboundTimestamps[0] < cutoff) {
+    outboundTimestamps.shift();
+  }
+}
+
+function pruneRequestHistory(now: number): void {
+  const cutoff = now - STATS_WINDOW_MS;
+  while (requestHistory.length > 0 && requestHistory[0].ts < cutoff) {
+    requestHistory.shift();
+  }
+}
+
+/** Waits until there is capacity in both Riot API rate windows, then reserves a slot. */
+async function acquireRiotSlot(): Promise<void> {
+  for (;;) {
+    const now = Date.now();
+    pruneOutboundTimestamps(now);
+
+    const shortCutoff = now - SHORT_WINDOW_MS;
+    const inShortWindow = outboundTimestamps.filter((t) => t >= shortCutoff).length;
+    const inLongWindow = outboundTimestamps.length;
+
+    const shortLimit = config.riotOutboundLimitPerSecond();
+    const longLimit = config.riotOutboundLimitPer2Min();
+
+    if (inShortWindow < shortLimit && inLongWindow < longLimit) {
+      outboundTimestamps.push(now);
+      return;
+    }
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+export interface RiotUsageStats {
+  last15mTotal: number;
+  last15m429s: number;
+  last2mTotal: number;
+  availableShortBudget: number;
+  availableLongBudget: number;
+}
+
+/** Returns a snapshot of outbound Riot API usage for budget-aware cron decisions. */
+export function getRiotUsageStats(): RiotUsageStats {
+  const now = Date.now();
+  pruneRequestHistory(now);
+  pruneOutboundTimestamps(now);
+
+  const shortCutoff = now - SHORT_WINDOW_MS;
+  const longCutoff = now - LONG_WINDOW_MS;
+
+  const last2mTotal = outboundTimestamps.filter((t) => t >= longCutoff).length;
+  const inShortWindow = outboundTimestamps.filter((t) => t >= shortCutoff).length;
+
+  const last15m429s = requestHistory.filter((r) => r.was429).length;
+
+  return {
+    last15mTotal: requestHistory.length,
+    last15m429s,
+    last2mTotal,
+    availableShortBudget: Math.max(0, config.riotOutboundLimitPerSecond() - inShortWindow),
+    availableLongBudget: Math.max(0, config.riotOutboundLimitPer2Min() - last2mTotal),
+  };
+}
+
 // TODO: derive platform from request (e.g. query param, subdomain, or user setting)
 export function getPlatform(_req: Request): string {
   return "na1";
@@ -34,6 +121,8 @@ function isHighVolumeStep(step: string): boolean {
 }
 
 async function riotFetch<T>(url: string, step: string): Promise<T> {
+  await acquireRiotSlot();
+
   const startMs = Date.now();
 
   const response = await fetch(url, {
@@ -43,6 +132,10 @@ async function riotFetch<T>(url: string, step: string): Promise<T> {
   });
 
   const latencyMs = Date.now() - startMs;
+  const was429 = response.status === 429;
+  requestHistory.push({ ts: Date.now(), step, was429 });
+  pruneRequestHistory(Date.now());
+
   const body = await response.text();
   let data: unknown;
   try {
@@ -52,7 +145,7 @@ async function riotFetch<T>(url: string, step: string): Promise<T> {
   }
 
   if (!response.ok) {
-    if (response.status === 429) {
+    if (was429) {
       logger.warn("riot rate limit", { step, riotStatus: response.status, latencyMs });
     } else {
       logger.error("riot api error", { step, riotStatus: response.status, latencyMs });

@@ -32,7 +32,7 @@ function createQueryClient(): QueryClient {
     }),
     defaultOptions: {
       queries: {
-        refetchOnWindowFocus: false,
+        refetchOnWindowFocus: true,
         retry: false,
       },
     },

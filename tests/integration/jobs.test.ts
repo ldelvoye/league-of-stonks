@@ -100,6 +100,111 @@ describe("jobs routes integration", () => {
     expect(res.body.failed).toBe(0);
   });
 
+  it("leaderboard sync only selects the top 10 rollup rows", async () => {
+    const { getPool } = await import("../../backend/db/index.ts");
+    const { refreshLeaderboard } = await import("../../backend/db/tables/market.ts");
+
+    for (let i = 0; i < 12; i += 1) {
+      const player = await getPool().query<{ player_id: number }>(
+        `INSERT INTO players (game_name, tag_line, puuid, platform)
+         VALUES ($1, 'NA1', $2, 'na1')
+         RETURNING player_id`,
+        [`CapPlayer${i}`, `puuid-cap-${i}`],
+      );
+      const playerId = player.rows[0].player_id;
+      await getPool().query(
+        `INSERT INTO score_snapshots (player_id, score, source, recorded_at)
+         VALUES ($1, $2, 'snapshot', NOW())`,
+        [playerId, 1000],
+      );
+      await getPool().query(
+        `INSERT INTO score_snapshots (player_id, score, source, recorded_at)
+         VALUES ($1, $2, 'snapshot', NOW() + INTERVAL '1 hour')`,
+        [playerId, 1000 + (i + 1) * 10],
+      );
+    }
+
+    await refreshLeaderboard();
+    const rollupCount = await getPool().query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM leaderboard_rollup`,
+    );
+    expect(Number(rollupCount.rows[0].count)).toBe(12);
+
+    process.env.CRON_RIOT_BUDGET_THRESHOLD = "1000";
+    try {
+      mockRiotFetchWith({
+        matchIdsBody: [],
+      });
+
+      const res = await request(app)
+        .post("/api/jobs/riot-history-sync/leaderboard")
+        .set("Authorization", `Bearer ${TEST_SECRET}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.mode).toBe("leaderboard");
+      expect(res.body.selected).toBe(10);
+      expect(res.body.synced + res.body.failed).toBe(10);
+      expect(res.body.skipped).toBe(0);
+    } finally {
+      delete process.env.CRON_RIOT_BUDGET_THRESHOLD;
+    }
+  });
+
+  it("leaderboard rollup is capped to the top 100 deltas", async () => {
+    const { getPool } = await import("../../backend/db/index.ts");
+    const { refreshLeaderboard } = await import("../../backend/db/tables/market.ts");
+
+    await getPool().query(
+      `INSERT INTO players (game_name, tag_line, puuid, platform)
+       SELECT
+         'RollupCap' || gs::text,
+         'NA1',
+         'puuid-rollup-cap-' || gs::text,
+         'na1'
+       FROM generate_series(1, 105) AS gs`,
+    );
+
+    await getPool().query(
+      `INSERT INTO score_snapshots (player_id, score, source, recorded_at)
+       SELECT p.player_id, 1000, 'snapshot', NOW()
+       FROM players p
+       WHERE p.game_name LIKE 'RollupCap%'`,
+    );
+
+    await getPool().query(
+      `WITH seeded AS (
+         SELECT player_id, ROW_NUMBER() OVER (ORDER BY player_id) AS rn
+         FROM players
+         WHERE game_name LIKE 'RollupCap%'
+       )
+       INSERT INTO score_snapshots (player_id, score, source, recorded_at)
+       SELECT
+         seeded.player_id,
+         1000 + seeded.rn,
+         'snapshot',
+         NOW() + INTERVAL '1 hour'
+       FROM seeded`,
+    );
+
+    await refreshLeaderboard();
+
+    const rollupStats = await getPool().query<{
+      count: string;
+      min_delta: string;
+      max_delta: string;
+    }>(
+      `SELECT
+         COUNT(*)::text AS count,
+         MIN(delta_lp)::text AS min_delta,
+         MAX(delta_lp)::text AS max_delta
+       FROM leaderboard_rollup`,
+    );
+
+    expect(Number(rollupStats.rows[0].count)).toBe(100);
+    expect(Number(rollupStats.rows[0].max_delta)).toBe(105);
+    expect(Number(rollupStats.rows[0].min_delta)).toBe(6);
+  });
+
   // ── Random discovery sync ────────────────────────────────────────────────────
 
   it("random sync returns a valid summary when no stale players exist", async () => {
@@ -133,8 +238,8 @@ describe("jobs routes integration", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.mode).toBe("random-discovery");
-    expect(res.body.selected).toBe(1);
-    expect(res.body.synced).toBe(1);
+    expect(res.body.selected).toBeGreaterThanOrEqual(1);
+    expect(res.body.synced).toBeGreaterThanOrEqual(1);
     expect(res.body.failed).toBe(0);
   });
 

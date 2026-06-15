@@ -34,8 +34,8 @@ router.use(requireCronSecret);
 /**
  * POST /api/jobs/riot-history-sync/leaderboard
  *
- * Refreshes match history for all players in the leaderboard rollup, syncing
- * as many as the current Riot budget allows (top N by delta_lp first).
+ * Refreshes match history for the top leaderboard rows, syncing as many as the
+ * current Riot budget allows (delta_lp DESC).
  * Re-computes the leaderboard rollup after syncing.
  * Intended to run on a ~30-minute Railway Cron schedule.
  * Returns a compact summary suitable for Railway's log viewer.

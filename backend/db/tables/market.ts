@@ -37,9 +37,10 @@ function mapTopPerformerRow(row: Record<string, unknown>): TopPerformerRow {
   };
 }
 
-// Default window used by the leaderboard rollup.  Requests for this window
-// are served from the pre-computed table; other windows fall back to live queries.
+// Default window used by the leaderboard rollup. Requests for this window are
+// served from the pre-computed table; other windows fall back to live queries.
 const ROLLUP_WINDOW_DAYS = 30;
+const ROLLUP_MAX_ROWS = 100;
 
 export async function queryTopPerformers(
   { limit = 10, windowDays = 30 }: { limit?: number; windowDays?: number } = {},
@@ -81,7 +82,6 @@ export async function queryTopPerformers(
          AND recorded_at >= NOW() - make_interval(days => $2::int)
        ORDER BY recorded_at ASC LIMIT 1
      ) first_snap ON true
-     WHERE (last_snap.score - first_snap.score) > 0
      ORDER BY delta_lp DESC
      LIMIT $1`,
     [limit, windowDays],
@@ -90,7 +90,7 @@ export async function queryTopPerformers(
   return rows.map((row) => mapTopPerformerRow(row as Record<string, unknown>));
 }
 
-// Recomputes the leaderboard_rollup table for the default 30-day window.
+// Recomputes the top leaderboard_rollup rows for the default 30-day window.
 // Called by the scheduled job in backend/index.ts every few minutes.
 export async function refreshLeaderboard(db = getPool()): Promise<void> {
   await db.query(
@@ -120,7 +120,21 @@ export async function refreshLeaderboard(db = getPool()): Promise<void> {
            AND recorded_at >= NOW() - make_interval(days => $1::int)
          ORDER BY recorded_at ASC LIMIT 1
        ) first_snap ON true
-       WHERE (last_snap.score - first_snap.score) > 0
+     ),
+     capped AS (
+       SELECT
+         player_id,
+         game_name,
+         tag_line,
+         current_score,
+         baseline_score,
+         delta_lp,
+         delta_pct,
+         window_days,
+         computed_at
+       FROM latest
+       ORDER BY delta_lp DESC, player_id ASC
+       LIMIT $2::int
      ),
      upserted AS (
        INSERT INTO leaderboard_rollup (
@@ -138,7 +152,7 @@ export async function refreshLeaderboard(db = getPool()): Promise<void> {
          delta_pct,
          window_days,
          computed_at
-       FROM latest
+       FROM capped
        ON CONFLICT (player_id) DO UPDATE
          SET game_name      = EXCLUDED.game_name,
              tag_line       = EXCLUDED.tag_line,
@@ -154,10 +168,10 @@ export async function refreshLeaderboard(db = getPool()): Promise<void> {
      WHERE lr.window_days = $1::int
        AND NOT EXISTS (
          SELECT 1
-         FROM latest
-         WHERE latest.player_id = lr.player_id
+         FROM capped
+         WHERE capped.player_id = lr.player_id
        )`,
-    [ROLLUP_WINDOW_DAYS],
+    [ROLLUP_WINDOW_DAYS, ROLLUP_MAX_ROWS],
   );
 }
 

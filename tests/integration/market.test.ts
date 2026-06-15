@@ -132,14 +132,15 @@ describe("market routes integration", () => {
   it("leaderboard rollup reflects score improvements", async () => {
     const playerId = await seedPlayer("Grinder", "NA1", 500);
 
-    // First rollup — Grinder has no history beyond baseline so no delta.
+    // First rollup includes the player with a neutral delta.
     await refreshLeaderboard();
     const r1 = await request(app).get("/api/market/top?limit=10&window=30");
     expect(r1.status).toBe(200);
     const before = r1.body.find(
       (r: { gameName: string }) => r.gameName.toLowerCase() === "grinder",
     );
-    expect(before).toBeFalsy();
+    expect(before).toBeTruthy();
+    expect(before.deltaLp).toBe(0);
 
     // Add a second, higher score snapshot.
     await getPool().query(
@@ -160,7 +161,7 @@ describe("market routes integration", () => {
     expect(after.deltaLp).toBe(300);
   });
 
-  it("leaderboard refresh removes rows that no longer qualify", async () => {
+  it("leaderboard refresh keeps rows when delta returns to zero", async () => {
     const playerId = await seedPlayer("Backslider", "NA1", 700);
     await getPool().query(
       `INSERT INTO score_snapshots (player_id, score, source, recorded_at)
@@ -177,7 +178,7 @@ describe("market routes integration", () => {
     );
     expect(presentBefore).toBeTruthy();
 
-    // Latest score drops back to baseline, so the 30-day delta is no longer positive.
+    // Latest score drops back to baseline, so the 30-day delta returns to zero.
     await getPool().query(
       `INSERT INTO score_snapshots (player_id, score, source, recorded_at)
        VALUES ($1, 700, 'snapshot', NOW() + INTERVAL '2 hours')`,
@@ -191,7 +192,8 @@ describe("market routes integration", () => {
     const presentAfter = after.body.find(
       (r: { gameName: string }) => r.gameName.toLowerCase() === "backslider",
     );
-    expect(presentAfter).toBeFalsy();
+    expect(presentAfter).toBeTruthy();
+    expect(presentAfter.deltaLp).toBe(0);
   });
 
   // ── /api/market/recent-trades ─────────────────────────────────────────────

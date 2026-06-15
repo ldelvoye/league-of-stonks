@@ -71,9 +71,9 @@ Budget is checked before each player using live usage stats. Default cron budget
 
 ### Leaderboard sync (`POST /api/jobs/riot-history-sync/leaderboard`)
 
-Syncs players from `leaderboard_rollup` in `delta_lp` order until budget runs out. Recomputes the leaderboard rollup after successful syncs.
+Syncs the top **10** players from `leaderboard_rollup` in `delta_lp` order, budget permitting. Recomputes the leaderboard rollup after successful syncs.
 
-The home page shows the top **10** performers (`GET /api/market/top?limit=10`). The cron job syncs every qualifying row in `leaderboard_rollup` (all players with positive 30-day LP gain), ordered by `delta_lp` — not only the 10 displayed on the home page.
+`leaderboard_rollup` stores the top **100** 30-day deltas among players with a computable baseline and current snapshot (including negative/zero deltas). The home page still reads the top **10** (`GET /api/market/top?limit=10`), and cron sync targets that same top 10 set.
 
 Planning cost per player: **13** (assumes at most 2 new games: 1 `match-list` + 2 `match` + 1 `league` + 9 lobby `league`).
 
@@ -83,10 +83,11 @@ Planning cost per player: **13** (assumes at most 2 new games: 1 `match-list` + 
 | Per player synced (already up to date)                   | 1   | 2                                                                                             |
 | Per player synced (2 new games, full lobby)              | 4   | 13                                                                                            |
 | Per player synced (worst case)                           | 12  | 21                                                                                            |
-| Per run at default budget (60), cold start               | 0   | ~4 players × 13 = **52** (planning stops here; actual may be lower if players are up to date) |
-| Per run at default budget (60), all players worst case   |     | 4 × 21 = **84**                                                                               |
+| Per run at default budget (60), cold start               | 0   | ~4 players × 13 = **52** (planning can stop here; actual may be lower if players are up to date) |
+| Per run with cheap up-to-date players                    |     | Capped at **10** selected players (leaderboard sync limit)                                   |
+| Per run worst case under fixed top-10 candidate set      |     | 10 × 21 = **210** theoretical work, but budget gate typically stops near ~4 candidates first |
 
-At the default budget, `floor(60 / 13) = 4` players can be synced per run. With a full top-10 leaderboard and a cold budget, the top 4 sync this run and the remaining 6 are deferred to the next run.
+At the default budget, `floor(60 / 13) = 4` candidates can be planned before the budget gate would normally stop a cold run. When candidates are already up to date (often 1–2 calls each), the job can process all 10 selected rows.
 
 ### Random discovery (`POST /api/jobs/riot-history-sync/random`)
 

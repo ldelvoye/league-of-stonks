@@ -84,7 +84,7 @@ export const config = {
   },
   // Max Riot calls consumed per 2-minute window before cron reduces/skips work.
   cronRiotBudgetThreshold(): number {
-    return envNum("CRON_RIOT_BUDGET_THRESHOLD", 60);
+    return envNum("CRON_RIOT_BUDGET_THRESHOLD", 66);
   },
 
   // ── CORS / origin policy ──────────────────────────────────────────────────

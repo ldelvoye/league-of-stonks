@@ -56,9 +56,9 @@ Reads from Postgres only.
 
 Uses `getPlayerScoreForTrade`, which always calls `recordCurrentLeagueSnapshot` (one `GET /league` Riot call) regardless of the 5-minute cooldown. Concurrent trades for the same player are collapsed into a single in-flight request via single-flight deduplication (`activeLeagueSnapshots` map in `playerService.ts`).
 
-| Condition                        | Riot calls |
-| -------------------------------- | ---------- |
-| Any (player found, any cooldown) | **1** (`league`) |
+| Condition                        | Riot calls             |
+| -------------------------------- | ---------------------- |
+| Any (player found, any cooldown) | **1** (`league`)       |
 | Player not in DB                 | 0 (returns null → 404) |
 
 **Sustained Riot load:** 1 `league` call per trade (after dedup). With the per-user rate limit of 20 trades / 15 min, one maximally active user contributes at most ~1.3 `league` calls per minute. With 20 simultaneous users all at the rate limit: ~27 calls/minute = well within the 90/2min outbound budget.
@@ -67,7 +67,7 @@ Uses `getPlayerScoreForTrade`, which always calls `recordCurrentLeagueSnapshot` 
 
 Cron jobs call `POST /api/jobs/riot-history-sync/*` via `scripts/trigger-riot-history-sync.js`. The trigger script makes no Riot calls itself.
 
-Budget is checked before each player using live usage stats. Default cron budget threshold is **60 calls per 2 minutes** (`CRON_RIOT_BUDGET_THRESHOLD`). The hard outbound limiter allows up to **90 calls per 2 minutes**, leaving headroom for user traffic.
+Budget is checked before each player using live usage stats. Default cron budget threshold is **66 calls per 2 minutes** (`CRON_RIOT_BUDGET_THRESHOLD`). The hard outbound limiter allows up to **90 calls per 2 minutes**, leaving headroom for user traffic.
 
 ### Leaderboard sync (`POST /api/jobs/riot-history-sync/leaderboard`)
 
@@ -107,13 +107,13 @@ Each synced player can also add up to 9 new players to the DB via lobby snapshot
 
 ## Rate limiting
 
-| Layer                                    | Limit                             | Purpose                                             |
-| ---------------------------------------- | --------------------------------- | --------------------------------------------------- |
-| Riot (vendor)                            | 20 / 1s, 100 / 2min               | Hard API quota                                      |
-| Outbound limiter (`backend/lib/riot.ts`) | 18 / 1s, 90 / 2min (configurable) | Shared throttle for all outbound calls              |
-| Cron budget threshold                    | 60 / 2min (configurable)          | Cron pre-check before starting each player          |
-| Player `refresh=1` route                 | 10 / 15min per IP                 | Protects user-triggered syncs                       |
+| Layer                                    | Limit                             | Purpose                                              |
+| ---------------------------------------- | --------------------------------- | ---------------------------------------------------- |
+| Riot (vendor)                            | 20 / 1s, 100 / 2min               | Hard API quota                                       |
+| Outbound limiter (`backend/lib/riot.ts`) | 18 / 1s, 90 / 2min (configurable) | Shared throttle for all outbound calls               |
+| Cron budget threshold                    | 60 / 2min (configurable)          | Cron pre-check before starting each player           |
+| Player `refresh=1` route                 | 10 / 15min per IP                 | Protects user-triggered syncs                        |
 | Trade route (burst)                      | 5 / 30s per user                  | Prevents rapid-fire bot trading and Riot call bursts |
-| Trade route (sustained)                  | 20 / 15min per user               | Caps per-user Riot load from trade execution        |
+| Trade route (sustained)                  | 20 / 15min per user               | Caps per-user Riot load from trade execution         |
 
 Inspect live usage: `GET /api/jobs/riot-budget` (requires `CRON_SECRET`).

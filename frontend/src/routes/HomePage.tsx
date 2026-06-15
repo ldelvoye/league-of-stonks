@@ -102,13 +102,18 @@ export function HomePage() {
                   className="home-lb-row"
                 >
                   <span className="home-lb-rank">{index + 1}</span>
-                  <Link
-                    className="home-lb-player"
-                    to={buildPlayerRoute(performer.gameName, performer.tagLine)}
-                  >
-                    <span className="home-lb-name">{performer.gameName}</span>
-                    <span className="home-lb-tag">#{performer.tagLine}</span>
-                  </Link>
+                  <div className="home-lb-info">
+                    <Link
+                      className="home-lb-player"
+                      to={buildPlayerRoute(performer.gameName, performer.tagLine)}
+                    >
+                      <span className="home-lb-name">{performer.gameName}</span>
+                      <span className="home-lb-tag">#{performer.tagLine}</span>
+                    </Link>
+                    <span className="home-lb-meta">
+                      {formatLpInt(performer.currentScore) ?? "?"} LP
+                    </span>
+                  </div>
                   <span className={`home-lb-delta change-up`}>
                     +{formatLpInt(performer.deltaLp) ?? "0"} LP
                     {performer.deltaPct != null ? (

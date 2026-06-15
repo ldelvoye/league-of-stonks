@@ -26,7 +26,7 @@ export function useExecuteTrade({ gameName, tagLine, user }: UseExecuteTradeOpti
   const playerQueryKey = queryKeys.player.detail(gameName, tagLine);
 
   const handleTrade = useCallback(
-    async (side: PortfolioTradeSide, shares: string): Promise<void> => {
+    async (side: PortfolioTradeSide, shares: string, expectedPricePerShare: string): Promise<void> => {
       if (!user) {
         void navigate("/login");
         return;
@@ -38,7 +38,7 @@ export function useExecuteTrade({ gameName, tagLine, user }: UseExecuteTradeOpti
       }
 
       setTradeBusySide(side);
-      const result = await executeTrade(gameName, tagLine, side, shares);
+      const result = await executeTrade(gameName, tagLine, side, shares, expectedPricePerShare);
       setTradeBusySide(null);
 
       if (!result.ok || !result.data) {
@@ -46,6 +46,9 @@ export function useExecuteTrade({ gameName, tagLine, user }: UseExecuteTradeOpti
         showToast(message);
         if (result.status === 401) {
           void navigate("/login");
+        }
+        if (result.status === 409) {
+          await queryClient.invalidateQueries({ queryKey: playerQueryKey });
         }
         return;
       }

@@ -86,6 +86,7 @@ describe("portfolio routes integration", () => {
       tagLine: "KR1",
       side: "buy",
       shares: "1",
+      expectedPricePerShare: "1500.00",
     });
     expect(trade.status).toBe(401);
   });
@@ -104,6 +105,7 @@ describe("portfolio routes integration", () => {
       tagLine: "KR1",
       side: "buy",
       shares: "1",
+      expectedPricePerShare: "1500.00",
     });
     expect(trade.status).toBe(403);
     expect(trade.body.error).toContain("Verify your email");
@@ -130,6 +132,7 @@ describe("portfolio routes integration", () => {
       tagLine: "KR1",
       side: "buy",
       shares: "1.25",
+      expectedPricePerShare: "1500.00",
     });
 
     expect(buy.status).toBe(201);
@@ -162,6 +165,7 @@ describe("portfolio routes integration", () => {
       tagLine: "NA1",
       side: "buy",
       shares: "2",
+      expectedPricePerShare: "1500.00",
     });
     expect(buy.status).toBe(201);
 
@@ -188,6 +192,7 @@ describe("portfolio routes integration", () => {
       tagLine: "NA1",
       side: "sell",
       shares: "0.5",
+      expectedPricePerShare: "1800.00",
     });
 
     expect(sell.status).toBe(201);
@@ -219,6 +224,7 @@ describe("portfolio routes integration", () => {
       tagLine: "NA1",
       side: "buy",
       shares: "2",
+      expectedPricePerShare: "30000.00",
     });
     expect(buy.status).toBe(400);
     expect(buy.body.error).toContain("Insufficient available balance");
@@ -234,6 +240,7 @@ describe("portfolio routes integration", () => {
       tagLine: "NA1",
       side: "buy",
       shares: "1.2345",
+      expectedPricePerShare: "1000.00",
     });
     expect(buy.status).toBe(400);
     expect(buy.body.error).toContain("positive shares value");
@@ -249,6 +256,7 @@ describe("portfolio routes integration", () => {
       tagLine: "NA1",
       side: "buy",
       shares: "0.5",
+      expectedPricePerShare: "1000.00",
     });
     expect(buy.status).toBe(201);
 
@@ -257,6 +265,7 @@ describe("portfolio routes integration", () => {
       tagLine: "NA1",
       side: "sell",
       shares: "1",
+      expectedPricePerShare: "1000.00",
     });
     expect(sell.status).toBe(400);
     expect(sell.body.error).toContain("Insufficient shares");
@@ -272,9 +281,44 @@ describe("portfolio routes integration", () => {
       tagLine: "NA1",
       side: "buy",
       shares: "1",
+      expectedPricePerShare: "1000.00",
     });
     expect(buy.status).toBe(400);
     expect(buy.body.error).toContain("cannot be traded");
+  });
+
+  it("rejects trades when the client price is stale", async () => {
+    const agent = request.agent(app);
+    await registerAgent(agent, "stale_price_user", "stale_price_user@example.com");
+    const playerId = await seedPlayerScore("StalePrice", "NA1", 1500);
+
+    await getPool().query(
+      `INSERT INTO score_snapshots (player_id, score, source, recorded_at)
+       VALUES ($1, $2, 'snapshot', NOW() + INTERVAL '1 minute')`,
+      [playerId, 1800],
+    );
+    await getPool().query(
+      `INSERT INTO player_latest_scores (player_id, score, recorded_at, source, updated_at)
+       VALUES ($1, $2, NOW() + INTERVAL '1 minute', 'snapshot', NOW())
+       ON CONFLICT (player_id) DO UPDATE
+         SET score       = EXCLUDED.score,
+             recorded_at = EXCLUDED.recorded_at,
+             source      = EXCLUDED.source,
+             updated_at  = NOW()
+         WHERE player_latest_scores.recorded_at <= EXCLUDED.recorded_at`,
+      [playerId, 1800],
+    );
+
+    const buy = await agent.post("/api/portfolio/trades").send({
+      gameName: "StalePrice",
+      tagLine: "NA1",
+      side: "buy",
+      shares: "1",
+      expectedPricePerShare: "1500.00",
+    });
+    expect(buy.status).toBe(409);
+    expect(buy.body.error).toContain("price per share has changed");
+    expect(buy.body.error).toContain("Refresh");
   });
 
   it("concurrent sells cannot oversell shares beyond owned position", async () => {
@@ -287,6 +331,7 @@ describe("portfolio routes integration", () => {
       tagLine: "NA1",
       side: "buy",
       shares: "1",
+      expectedPricePerShare: "1000.00",
     });
     expect(buy.status).toBe(201);
 
@@ -298,12 +343,14 @@ describe("portfolio routes integration", () => {
         tagLine: "NA1",
         side: "sell",
         shares: "0.75",
+        expectedPricePerShare: "1000.00",
       }),
       agent.post("/api/portfolio/trades").send({
         gameName: "ConcurrentSellTarget",
         tagLine: "NA1",
         side: "sell",
         shares: "0.75",
+        expectedPricePerShare: "1000.00",
       }),
     ]);
 
@@ -331,12 +378,14 @@ describe("portfolio routes integration", () => {
         tagLine: "NA1",
         side: "buy",
         shares: "1",
+        expectedPricePerShare: "40000.00",
       }),
       agent.post("/api/portfolio/trades").send({
         gameName: "ExpensiveConcurrent",
         tagLine: "NA1",
         side: "buy",
         shares: "1",
+        expectedPricePerShare: "40000.00",
       }),
     ]);
 

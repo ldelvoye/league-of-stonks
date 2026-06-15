@@ -7,6 +7,7 @@ import { requireSafeOrigin } from "../lib/csrf.js";
 import {
   executePortfolioTrade,
   getPortfolioSnapshot,
+  normalizePricePerShareInput,
   normalizeSharesInput,
 } from "../lib/portfolioService.js";
 import { getPlatform } from "../lib/riot.js";
@@ -67,10 +68,12 @@ router.post("/trades", requireSafeOrigin, requireAuth, requireVerifiedEmail, por
   const tagLine = normalizeRiotSegment(body.tagLine, 16);
   const side = parseTradeSide(body.side);
   const shares = normalizeSharesInput(body.shares);
+  const expectedPricePerShare = normalizePricePerShareInput(body.expectedPricePerShare);
 
-  if (!gameName || !tagLine || !side || !shares) {
+  if (!gameName || !tagLine || !side || !shares || !expectedPricePerShare) {
     res.status(400).json({
-      error: "gameName, tagLine, side (buy/sell), and a positive shares value are required.",
+      error:
+        "gameName, tagLine, side (buy/sell), expectedPricePerShare, and a positive shares value are required.",
     });
     return;
   }
@@ -82,6 +85,7 @@ router.post("/trades", requireSafeOrigin, requireAuth, requireVerifiedEmail, por
     platform: getPlatform(req),
     side,
     shares,
+    expectedPricePerShare,
   });
   res.status(201).json(result);
 });

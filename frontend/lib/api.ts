@@ -163,12 +163,14 @@ export const executeTrade = (
   tagLine: string,
   side: PortfolioTradeSide,
   shares: string,
+  expectedPricePerShare: string,
 ) =>
   apiPost<ExecuteTradeResult>(portfolioPath("/trades"), {
     gameName,
     tagLine,
     side,
     shares,
+    expectedPricePerShare,
   });
 
 export const getMarketStats = () =>
@@ -205,6 +207,8 @@ export function portfolioErrorMessage(status: number, data: ApiErrorBody | null)
       return "Verify your email to access your portfolio.";
     case 404:
       return "Portfolio data was not found.";
+    case 409:
+      return "The price per share has changed. Use the Refresh button to load the latest price and try again.";
     case 429:
       return "Too many requests, please try again shortly.";
     case 0:

@@ -48,6 +48,11 @@ export function formatMoney(value: number | string | null | undefined): string |
   });
 }
 
+/** Canonical price-per-share string for trade API payloads (matches backend rounding). */
+export function toPricePerShareString(score: number): string {
+  return score.toFixed(2);
+}
+
 // LP is always an integer — use this for chart axis labels where space is tight.
 export function formatLpInt(value: number | string | null | undefined): string | null {
   const numeric = toNumeric(value);

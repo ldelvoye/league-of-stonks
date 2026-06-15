@@ -9,6 +9,7 @@ import {
   formatShares,
   formatSignedMoney,
   toNumeric,
+  toPricePerShareString,
   trendArrow,
   trendClass,
 } from "../../../../lib/format.js";
@@ -138,8 +139,8 @@ export function PlayerTradePanel({
 
   const onTrade = (side: PortfolioTradeSide) => {
     const shares = normalizeSharesInput(sharesInput);
-    if (!shares) return;
-    void handleTrade(side, shares);
+    if (!shares || tradePriceScore == null) return;
+    void handleTrade(side, shares, toPricePerShareString(tradePriceScore));
   };
 
   return (

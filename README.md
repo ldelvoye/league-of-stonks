@@ -29,6 +29,9 @@ Current product scope:
   - `GET /health`
   - `GET /api/player/:gameName/:tagLine`
   - `GET /api/player/:gameName/:tagLine/history`
+  - `POST /api/jobs/riot-history-sync/leaderboard` (cron, authenticated)
+  - `POST /api/jobs/riot-history-sync/random` (cron, authenticated)
+  - `GET /api/jobs/riot-budget` (cron, authenticated)
 - Frontend fetches backend API from:
   - `http://localhost:3000` when frontend runs locally on `localhost:3001`
   - `https://api.leagueofstonks.com` otherwise
@@ -71,9 +74,13 @@ Typical local split workflow:
 - `npm run db:status` show applied vs pending migrations
 - `npm run db:seed` insert test player history data
 
+## Riot API usage and cron costs
+
+See [docs/riot-api-costs.md](docs/riot-api-costs.md) for per-route Riot call counts and min/max cost estimates for the leaderboard and random-discovery cron jobs.
+
 ## Deployment (Railway)
 
-Use two Railway services from the same repo.
+Use two Railway services from the same repo, plus optional cron services for background player sync.
 
 ### Backend service
 
@@ -88,6 +95,17 @@ Use two Railway services from the same repo.
 - Start command: blank (static hosting)
 - Static root: `frontend/dist` (configured with `Staticfile`)
 - Custom domain: `leagueofstonks.com` / `www.leagueofstonks.com`
+
+### Cron services (optional)
+
+Create one Railway Cron service per sync mode from the same repo.
+
+- Build command: `npm ci`
+- Start command: `node scripts/trigger-riot-history-sync.js`
+- Required vars: `SYNC_MODE` (`leaderboard` or `random-discovery`), `API_BASE_URL`, `CRON_SECRET`
+- Suggested schedules: leaderboard every 30 minutes, random discovery every 5 minutes
+
+The backend service also needs `CRON_SECRET` set so `/api/jobs/*` endpoints are enabled.
 
 ## Conventions for contributors and coding agents
 

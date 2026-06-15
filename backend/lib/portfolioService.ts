@@ -19,7 +19,11 @@ import { getPlayerScore } from "./playerService.js";
 type Queryable = Pick<Pool | PoolClient, "query">;
 
 const SHARES_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,3})?$/;
+const PRICE_PER_SHARE_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 const TRADE_HISTORY_LIMIT = 40;
+
+export const PRICE_CHANGED_MESSAGE =
+  "The price per share has changed. Use the Refresh button to load the latest price and try again.";
 
 export class PortfolioServiceError extends Error {
   status: number;
@@ -74,6 +78,7 @@ export interface ExecutePortfolioTradeInput {
   platform: string;
   side: PortfolioTradeSide;
   shares: string;
+  expectedPricePerShare: string;
 }
 
 export interface ExecutePortfolioTradeResult {
@@ -104,6 +109,21 @@ export function normalizeSharesInput(value: unknown): string | null {
   if (!SHARES_PATTERN.test(raw)) return null;
   if (Number(raw) <= 0) return null;
   return raw;
+}
+
+export function normalizePricePerShareInput(value: unknown): string | null {
+  let raw: string;
+  if (typeof value === "string") {
+    raw = value.trim();
+  } else if (typeof value === "number" && Number.isFinite(value)) {
+    raw = value.toString();
+  } else {
+    return null;
+  }
+
+  if (!PRICE_PER_SHARE_PATTERN.test(raw)) return null;
+  if (Number(raw) < 0) return null;
+  return toMoneyString(Number(raw));
 }
 
 function toMoneyString(value: number): string {
@@ -232,13 +252,18 @@ export async function getPortfolioSnapshot(userId: number): Promise<PortfolioSna
 export async function executePortfolioTrade(
   input: ExecutePortfolioTradeInput,
 ): Promise<ExecutePortfolioTradeResult> {
-  const { userId, gameName, tagLine, platform, side, shares } = input;
+  const { userId, gameName, tagLine, platform, side, shares, expectedPricePerShare } = input;
 
   const score = await getPlayerScore(gameName, tagLine, platform, { refresh: false });
   if (score == null) {
     throw new PortfolioServiceError(400, "Player has no current price per share and cannot be traded.");
   }
   const pricePerShare = toMoneyString(score);
+
+  const db = getPool();
+  if ((await compareNumeric(db, expectedPricePerShare, pricePerShare)) !== 0) {
+    throw new PortfolioServiceError(409, PRICE_CHANGED_MESSAGE);
+  }
 
   const player = await findPlayerByRiotId(gameName, tagLine, platform);
   if (!player) {

@@ -23,28 +23,39 @@ function toErrorContext(err: unknown): { message: string; stack?: string } {
   return { message: String(err) };
 }
 
+// ── Per-player Riot API cost estimates ────────────────────────────────────────
+// Leaderboard: assume at most 2 new games since the last 30-minute refresh.
+//   1 match-list + 2 match details + 1 league anchor + 9 lobby league = 13
+const LEADERBOARD_COST_PER_PLAYER = 13;
+
+// Random discovery: worst case — player has 10 pending matches (MATCH_SYNC_DEPTH).
+//   1 match-list + 10 match details + 1 league anchor + 9 lobby league = 21
+const DISCOVERY_COST_PER_PLAYER = 21;
+
+function hasBudgetFor(costPerPlayer: number): boolean {
+  const stats = getRiotUsageStats();
+  const remaining = config.cronRiotBudgetThreshold() - stats.last2mTotal;
+  return remaining >= costPerPlayer;
+}
+
 /**
- * Syncs top performers from the leaderboard rollup.
+ * Syncs all players in the leaderboard_rollup table, budget permitting.
  *
- * These players are expected to be inexpensive — most will have only 1-2 new
- * games since the last run, so the Riot call pattern is typically:
- *   match-list (1) + match details (0-2) + league (0-1) = 1-4 calls/player.
+ * Fetches the full leaderboard ordered by delta_lp DESC, then iterates top-to-
+ * bottom. Before each player the live Riot budget is re-checked; iteration stops
+ * as soon as there is not enough headroom for one more player sync.
  *
  * Runs `refreshLeaderboard()` after syncing so the market view is up to date.
  */
-export async function runLeaderboardSync({
-  topLimit = 3,
-}: { topLimit?: number } = {}): Promise<SyncJobResult> {
+export async function runLeaderboardSync(): Promise<SyncJobResult> {
   const startMs = Date.now();
-  const statsBefore = getRiotUsageStats();
+  const budgetThreshold = config.cronRiotBudgetThreshold();
+  const initialStats = getRiotUsageStats();
 
-  const budgetConstrained =
-    statsBefore.last2mTotal >= config.cronRiotBudgetThreshold();
-
-  if (budgetConstrained) {
+  if (initialStats.last2mTotal >= budgetThreshold) {
     logger.warn("cron leaderboard sync skipped: riot budget threshold reached", {
-      last2mTotal: statsBefore.last2mTotal,
-      threshold: config.cronRiotBudgetThreshold(),
+      last2mTotal: initialStats.last2mTotal,
+      threshold: budgetThreshold,
     });
     return {
       mode: "leaderboard",
@@ -54,16 +65,23 @@ export async function runLeaderboardSync({
       failed: 0,
       durationMs: Date.now() - startMs,
       budgetConstrained: true,
-      riotStats: statsBefore,
+      riotStats: initialStats,
     };
   }
 
-  const performers = await queryTopPerformers({ limit: topLimit });
+  // Fetch the entire leaderboard rollup, ordered by delta_lp DESC.
+  // The rollup table is bounded by the number of tracked players so this
+  // query is always cheap regardless of how large it grows.
+  const allPerformers = await queryTopPerformers({ limit: 1000 });
 
   let synced = 0;
   let failed = 0;
+  let i = 0;
 
-  for (const performer of performers) {
+  for (; i < allPerformers.length; i++) {
+    if (!hasBudgetFor(LEADERBOARD_COST_PER_PLAYER)) break;
+
+    const performer = allPerformers[i];
     try {
       await syncPlayerForCron(performer.gameName, performer.tagLine, "na1");
       synced += 1;
@@ -77,6 +95,8 @@ export async function runLeaderboardSync({
     }
   }
 
+  const skipped = allPerformers.length - i;
+
   if (synced > 0) {
     try {
       await refreshLeaderboard();
@@ -89,8 +109,8 @@ export async function runLeaderboardSync({
 
   const result: SyncJobResult = {
     mode: "leaderboard",
-    selected: performers.length,
-    skipped: 0,
+    selected: i,
+    skipped,
     synced,
     failed,
     durationMs: Date.now() - startMs,
@@ -103,27 +123,25 @@ export async function runLeaderboardSync({
 }
 
 /**
- * Syncs as many random stale players as the current Riot API budget allows,
- * up to `maxLimit` as a hard safety cap.
+ * Continuously syncs random stale players until the Riot API budget is
+ * exhausted or no more stale players remain.
  *
- * These syncs are expensive because lobby snapshots can introduce up to 9 new
- * players per match, each of which may receive a league call on their next
- * refresh. The target count is computed dynamically from the remaining 2-minute
- * budget so the job automatically backs off when user traffic is elevated and
- * runs aggressively when the API is quiet.
+ * Budget is re-evaluated before each player using the worst-case cost
+ * (1 match-list + 10 match details + 1 league + 9 lobby = 21 calls). Players
+ * that fail to sync are excluded from subsequent picks within the same run so
+ * a persistently failing player cannot trap the loop.
+ *
+ * Discovery syncs are intentionally expensive: each player can fan out up to
+ * 9 lobby snapshots, seeding the database with new players for future runs.
  */
-export async function runRandomDiscoverySync({
-  maxLimit = 10,
-}: { maxLimit?: number } = {}): Promise<SyncJobResult> {
+export async function runRandomDiscoverySync(): Promise<SyncJobResult> {
   const startMs = Date.now();
-  const statsBefore = getRiotUsageStats();
-
   const budgetThreshold = config.cronRiotBudgetThreshold();
-  const budgetConstrained = statsBefore.last2mTotal >= budgetThreshold;
+  const initialStats = getRiotUsageStats();
 
-  if (budgetConstrained) {
+  if (initialStats.last2mTotal >= budgetThreshold) {
     logger.warn("cron random discovery skipped: riot budget threshold reached", {
-      last2mTotal: statsBefore.last2mTotal,
+      last2mTotal: initialStats.last2mTotal,
       threshold: budgetThreshold,
     });
     return {
@@ -134,48 +152,24 @@ export async function runRandomDiscoverySync({
       failed: 0,
       durationMs: Date.now() - startMs,
       budgetConstrained: true,
-      riotStats: statsBefore,
+      riotStats: initialStats,
     };
   }
-
-  // Derive how many players we can safely sync from the remaining budget.
-  // Each full discovery sync costs roughly 21 calls in the worst case
-  // (1 match-list + 10 match details + 1 league + 9 lobby league calls),
-  // but averages ~3-5 calls for players who are mostly up to date.
-  // We use 5 as a conservative estimate to stay well within the window.
-  const ESTIMATED_CALLS_PER_PLAYER = 5;
-  const remaining = budgetThreshold - statsBefore.last2mTotal;
-  const budgetDrivenLimit = Math.floor(remaining / ESTIMATED_CALLS_PER_PLAYER);
-  const safeLimit = Math.min(maxLimit, budgetDrivenLimit);
-
-  if (safeLimit <= 0) {
-    return {
-      mode: "random-discovery",
-      selected: 0,
-      skipped: budgetDrivenLimit < 1 ? 1 : 0,
-      synced: 0,
-      failed: 0,
-      durationMs: Date.now() - startMs,
-      budgetConstrained: false,
-      riotStats: statsBefore,
-    };
-  }
-
-  // queryTopPerformers doesn't return DB player IDs, so we can't exclude them
-  // by ID here. The 5-minute cooldown makes any overlap a cheap no-op: a player
-  // recently synced by the leaderboard job will be skipped inside playerService
-  // without touching Riot. The two pools are logically separated by staleness.
-  const candidates = await queryRandomStalePlayers(safeLimit);
 
   let synced = 0;
   let failed = 0;
+  const failedIds: number[] = [];
 
-  for (const candidate of candidates) {
+  while (hasBudgetFor(DISCOVERY_COST_PER_PLAYER)) {
+    const [candidate] = await queryRandomStalePlayers(1, failedIds);
+    if (!candidate) break;
+
     try {
       await syncPlayerForCron(candidate.gameName, candidate.tagLine, candidate.platform);
       synced += 1;
     } catch (err) {
       failed += 1;
+      failedIds.push(candidate.playerId);
       logger.error("cron random discovery: player sync failed", {
         gameName: candidate.gameName,
         tagLine: candidate.tagLine,
@@ -196,8 +190,8 @@ export async function runRandomDiscoverySync({
 
   const result: SyncJobResult = {
     mode: "random-discovery",
-    selected: candidates.length,
-    skipped: Math.max(0, maxLimit - safeLimit),
+    selected: synced + failed,
+    skipped: 0,
     synced,
     failed,
     durationMs: Date.now() - startMs,

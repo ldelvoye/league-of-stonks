@@ -2,7 +2,6 @@ import { Router, type RequestHandler } from "express";
 import { runLeaderboardSync, runRandomDiscoverySync } from "../jobs/riotHistorySync.js";
 import { getRiotUsageStats } from "../lib/riot.js";
 import { config } from "../lib/config.js";
-import { parseBoundedPositiveIntQuery } from "../lib/validation.js";
 
 const router = Router();
 
@@ -35,28 +34,27 @@ router.use(requireCronSecret);
 /**
  * POST /api/jobs/riot-history-sync/leaderboard
  *
- * Refreshes match history for the top-performing players and re-computes the
- * leaderboard rollup. Intended to run on a ~30-minute Railway Cron schedule.
+ * Refreshes match history for all players in the leaderboard rollup, syncing
+ * as many as the current Riot budget allows (top N by delta_lp first).
+ * Re-computes the leaderboard rollup after syncing.
+ * Intended to run on a ~30-minute Railway Cron schedule.
  * Returns a compact summary suitable for Railway's log viewer.
  */
-router.post("/riot-history-sync/leaderboard", async (req, res) => {
-  const topLimit = parseBoundedPositiveIntQuery(req.query.topLimit, 3, 10) ?? 3;
-  const result = await runLeaderboardSync({ topLimit });
+router.post("/riot-history-sync/leaderboard", async (_req, res) => {
+  const result = await runLeaderboardSync();
   res.json(result);
 });
 
 /**
  * POST /api/jobs/riot-history-sync/random
  *
- * Syncs as many random stale players as the current Riot budget allows, up to
- * `maxLimit` (default 10, max 20). The actual number processed is derived from
- * the remaining 2-minute window budget so the job self-throttles under load.
- * Intended to run on a ~5-minute Railway Cron schedule.
- * Returns a compact summary suitable for Railway's log viewer.
+ * Continuously syncs random stale players until the Riot budget is exhausted
+ * or no more stale players remain. Budget is re-evaluated before each player
+ * using the worst-case cost (21 calls). Intended to run on a ~5-minute Railway
+ * Cron schedule. Returns a compact summary suitable for Railway's log viewer.
  */
-router.post("/riot-history-sync/random", async (req, res) => {
-  const maxLimit = parseBoundedPositiveIntQuery(req.query.maxLimit, 10, 20) ?? 10;
-  const result = await runRandomDiscoverySync({ maxLimit });
+router.post("/riot-history-sync/random", async (_req, res) => {
+  const result = await runRandomDiscoverySync();
   res.json(result);
 });
 

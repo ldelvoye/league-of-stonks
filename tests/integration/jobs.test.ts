@@ -128,7 +128,7 @@ describe("jobs routes integration", () => {
     });
 
     const res = await request(app)
-      .post("/api/jobs/riot-history-sync/random?maxLimit=1")
+      .post("/api/jobs/riot-history-sync/random")
       .set("Authorization", `Bearer ${TEST_SECRET}`);
 
     expect(res.status).toBe(200);
@@ -195,7 +195,7 @@ describe("jobs routes integration", () => {
     await request(app).get("/api/player/Faker/KR1");
 
     const res = await request(app)
-      .post("/api/jobs/riot-history-sync/random?maxLimit=10")
+      .post("/api/jobs/riot-history-sync/random")
       .set("Authorization", `Bearer ${TEST_SECRET}`);
 
     expect(res.status).toBe(200);
@@ -223,7 +223,7 @@ describe("jobs routes integration", () => {
     );
 
     const res = await request(app)
-      .post("/api/jobs/riot-history-sync/random?maxLimit=10")
+      .post("/api/jobs/riot-history-sync/random")
       .set("Authorization", `Bearer ${TEST_SECRET}`);
 
     expect(res.status).toBe(200);

@@ -73,9 +73,10 @@ export interface StaleCandidateRow {
 
 /**
  * Returns up to `limit` players that have not had a snapshot recorded in the
- * last 5 minutes, excluding any player IDs in `excludeIds`. Players with no
- * snapshots at all are prioritised, then results are randomised so repeated
- * cron runs cycle through the full player pool over time.
+ * last 5 minutes, excluding any player IDs in `excludeIds`. Results are
+ * randomised so repeated cron runs cycle through the full player pool over time.
+ * Both players with no snapshots at all and players with stale snapshots are
+ * eligible and treated equally.
  */
 export async function queryRandomStalePlayers(
   limit: number,

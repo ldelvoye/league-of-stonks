@@ -1,20 +1,20 @@
 /**
  * One-shot cron trigger for Railway Cron services.
  *
- * Reads SYNC_MODE, API_BASE_URL, and CRON_SECRET from env, calls the matching
- * backend maintenance endpoint, prints the JSON summary, and exits.
+ * Plain JavaScript — no build step required. Railway Cron service config:
+ *   Build command:  npm ci
+ *   Start command:  node scripts/trigger-riot-history-sync.js
  *
- * Configure two separate Railway Cron services from the same repo:
- *   Leaderboard freshness (~30 min):  SYNC_MODE=leaderboard
- *   Random player discovery (~5 min): SYNC_MODE=random-discovery
+ * Required env vars (set on the Railway Cron service, not the backend):
+ *   SYNC_MODE     — "leaderboard" or "random-discovery"
+ *   API_BASE_URL  — base URL of the deployed backend, e.g. https://api.leagueofstonks.com
+ *   CRON_SECRET   — shared secret matching the backend's CRON_SECRET
  *
- * Start command for each:
- *   node --input-type=module < scripts/trigger-riot-history-sync.js
- *   -- OR after building --
- *   node backend/dist/scripts/trigger-riot-history-sync.js
+ * Optional:
+ *   DOTENV_PATH   — path to a .env file; only needed for local testing
  */
-import dotenv from "dotenv";
-dotenv.config({ quiet: true });
+import { config as dotenvConfig } from "dotenv";
+dotenvConfig({ quiet: true });
 
 const mode = process.env.SYNC_MODE;
 const apiBase = process.env.API_BASE_URL;
@@ -40,7 +40,7 @@ const endpoint =
     ? `${apiBase}/api/jobs/riot-history-sync/leaderboard`
     : `${apiBase}/api/jobs/riot-history-sync/random`;
 
-let res: Response;
+let res;
 try {
   res = await fetch(endpoint, {
     method: "POST",
@@ -54,7 +54,7 @@ try {
   process.exit(1);
 }
 
-let body: unknown;
+let body;
 try {
   body = await res.json();
 } catch {

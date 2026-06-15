@@ -172,6 +172,59 @@
   }
 }
 
+/* ── AnimatedNumber digit scroll ── */
+.anim-number {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.anim-number__slot {
+  display: inline-block;
+  overflow: hidden;
+  height: 1.2em;
+  line-height: 1.2;
+  vertical-align: text-bottom;
+}
+
+.anim-number__sep {
+  display: inline-block;
+}
+
+.anim-number__digit {
+  display: block;
+  line-height: 1.2;
+}
+
+.anim-number__digit--up {
+  animation: digitScrollUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.anim-number__digit--down {
+  animation: digitScrollDown 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes digitScrollUp {
+  from {
+    transform: translateY(80%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes digitScrollDown {
+  from {
+    transform: translateY(-80%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 /* ── Market Pulse stats ── */
 .home-stats-grid {
   margin-top: 14px;

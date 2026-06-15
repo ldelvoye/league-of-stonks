@@ -4,6 +4,7 @@ import { useAuth } from "../state/AuthContext.js";
 import { useMarketStats, useTopPerformers, useRecentTrades } from "../queries/market.js";
 import { formatLpInt, formatShares, formatDate } from "../../lib/format.js";
 import { buildPlayerRoute } from "../lib/riotId.js";
+import { AnimatedNumber } from "../components/AnimatedNumber.js";
 
 export function HomePage() {
   const { user } = useAuth();
@@ -58,19 +59,22 @@ export function HomePage() {
             <div className="home-stats-grid">
               <div className="home-stat-cell">
                 <span className="home-stat-value">
-                  {statsQuery.data.trackedSummoners.toLocaleString()}
+                  <AnimatedNumber value={statsQuery.data.trackedSummoners} />
                 </span>
                 <span className="home-stat-label">Summoners tracked</span>
               </div>
               <div className="home-stat-cell">
                 <span className="home-stat-value">
-                  {statsQuery.data.totalTrades.toLocaleString()}
+                  <AnimatedNumber value={statsQuery.data.totalTrades} />
                 </span>
                 <span className="home-stat-label">All-time trades</span>
               </div>
               <div className="home-stat-cell">
                 <span className="home-stat-value">
-                  {formatLpInt(statsQuery.data.volume24h) ?? "0"}
+                  <AnimatedNumber
+                    value={parseFloat(statsQuery.data.volume24h) || 0}
+                    formatter={(v) => Math.round(v).toLocaleString()}
+                  />
                 </span>
                 <span className="home-stat-label">LP volume (24 h)</span>
               </div>

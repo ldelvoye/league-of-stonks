@@ -14,7 +14,7 @@ import {
 } from "../db/tables/portfolioTrades.js";
 import { findPortfolioByUserId } from "../db/tables/portfolios.js";
 import { findPlayerByRiotId } from "../db/tables/players.js";
-import { getPlayerScore } from "./playerService.js";
+import { getPlayerScoreForTrade } from "./playerService.js";
 
 type Queryable = Pick<Pool | PoolClient, "query">;
 
@@ -254,7 +254,7 @@ export async function executePortfolioTrade(
 ): Promise<ExecutePortfolioTradeResult> {
   const { userId, gameName, tagLine, platform, side, shares, expectedPricePerShare } = input;
 
-  const score = await getPlayerScore(gameName, tagLine, platform, { refresh: false });
+  const score = await getPlayerScoreForTrade(gameName, tagLine, platform);
   if (score == null) {
     throw new PortfolioServiceError(400, "Player has no current price per share and cannot be traded.");
   }

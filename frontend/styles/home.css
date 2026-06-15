@@ -130,13 +130,45 @@
 }
 
 @media (min-width: 900px) {
-  .home-grid .home-panel:nth-child(1) {
-    grid-column: span 4;
+  .home-panel--pulse {
+    grid-column: span 12;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    padding: 14px 18px;
   }
 
-  .home-grid .home-panel:nth-child(2),
-  .home-grid .home-panel:nth-child(3) {
-    grid-column: span 4;
+  .home-panel--pulse .home-panel-head {
+    flex: none;
+    padding-right: 20px;
+    margin-right: 16px;
+    border-right: 1px solid var(--border-soft);
+  }
+
+  .home-panel--pulse .home-stats-grid {
+    flex: 1;
+    flex-direction: row;
+    margin-top: 0;
+    gap: 8px;
+  }
+
+  .home-panel--pulse .home-stat-cell {
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+  }
+
+  .home-panel--pulse .home-stat-value {
+    font-size: 20px;
+  }
+
+  .home-panel--performers {
+    grid-column: span 6;
+  }
+
+  .home-panel--trades {
+    grid-column: span 6;
   }
 }
 

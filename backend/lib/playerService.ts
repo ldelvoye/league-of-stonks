@@ -23,6 +23,11 @@ const MATCH_SYNC_DEPTH = 10;
 // Keyed by normalized platform/gameName/tagLine so even cold-cache concurrent
 // requests collapse before resolvePlayer() reaches Riot account lookup.
 const activePlayerSyncs = new Map<string, Promise<number | null>>();
+
+// Single-flight map for trade-path league snapshots. Unlike activePlayerSyncs,
+// there is no cooldown — every trade always issues one fresh Riot league call.
+// Concurrent trades for the same player share a single in-flight request.
+const activeLeagueSnapshots = new Map<string, Promise<number | null>>();
 const LOBBY_SNAPSHOT_MAX_PLAYERS = 9;
 const DEFAULT_LP_SWING = 20;
 const MIN_LP_SWING = 8;
@@ -396,6 +401,20 @@ async function recordCurrentLeagueSnapshot(player: Player, platform: string): Pr
   return score;
 }
 
+async function getLeagueSnapshotDeduped(
+  player: Player,
+  platform: string,
+): Promise<number | null> {
+  const key = playerSyncKey(player.gameName, player.tagLine, platform);
+  const existing = activeLeagueSnapshots.get(key);
+  if (existing) return existing;
+  const snap = recordCurrentLeagueSnapshot(player, platform).finally(() => {
+    activeLeagueSnapshots.delete(key);
+  });
+  activeLeagueSnapshots.set(key, snap);
+  return snap;
+}
+
 async function refreshPlayerScoreIfNeeded(player: Player, platform: string): Promise<number | null> {
   const syncStartedAt = Date.now();
   const [latest] = await getScoreHistory(player.playerId, { limit: 1 });
@@ -579,6 +598,23 @@ export async function getPlayerScore(
   return refreshPlayerScoreDeduped(gameName, tagLine, platform, {
     allowStaleWhileSyncing: refresh,
   });
+}
+
+/**
+ * Fetches the live Riot LP for a player unconditionally (no cooldown), for use
+ * at trade-execution time where price accuracy is critical. Always issues one
+ * fresh `GET /league` Riot call; concurrent calls for the same player are
+ * collapsed into a single in-flight request via single-flight deduplication.
+ * Returns null if the player is not in the DB or is unranked.
+ */
+export async function getPlayerScoreForTrade(
+  gameName: string,
+  tagLine: string,
+  platform: string,
+): Promise<number | null> {
+  const player = await findPlayerByRiotId(gameName, tagLine, platform);
+  if (!player) return null;
+  return getLeagueSnapshotDeduped(player, platform);
 }
 
 /**

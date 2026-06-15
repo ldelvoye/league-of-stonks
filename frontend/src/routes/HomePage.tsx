@@ -42,7 +42,7 @@ export function HomePage() {
 
       <div className="home-grid">
         {/* ── Market Pulse ─────────────────────────────── */}
-        <section className="home-panel">
+        <section className="home-panel home-panel--pulse">
           <header className="home-panel-head">
             <h2 className="home-panel-title">Market Pulse</h2>
           </header>
@@ -79,7 +79,7 @@ export function HomePage() {
         </section>
 
         {/* ── Top Performers ───────────────────────────── */}
-        <section className="home-panel">
+        <section className="home-panel home-panel--performers">
           <header className="home-panel-head">
             <h2 className="home-panel-title">Top Performers</h2>
             <span className="home-panel-tag">30 days</span>
@@ -122,7 +122,7 @@ export function HomePage() {
         </section>
 
         {/* ── Recent Trades ────────────────────────────── */}
-        <section className="home-panel">
+        <section className="home-panel home-panel--trades">
           <header className="home-panel-head">
             <h2 className="home-panel-title">Recent Trades</h2>
           </header>

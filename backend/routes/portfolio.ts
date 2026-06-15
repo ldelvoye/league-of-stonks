@@ -26,10 +26,22 @@ const portfolioReadLimiter = rateLimit({
   keyGenerator: (req) => String(req.user?.userId ?? "unauthenticated"),
 });
 
-// Trade submissions: 30 per 15 minutes per user.
+// Trade burst protection: max 5 submissions per 30 seconds per user.
+// Each trade now forces a live Riot API call; this caps per-user burst to
+// 5 Riot calls / 30 s regardless of how many accounts a single person controls.
+const portfolioTradeBurstLimiter = rateLimit({
+  windowMs: 30 * 1000,
+  limit: 5,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Too many trade requests, please slow down." },
+  keyGenerator: (req) => String(req.user?.userId ?? "unauthenticated"),
+});
+
+// Trade sustained limiter: 20 per 15 minutes per user.
 const portfolioTradeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 30,
+  limit: 20,
   standardHeaders: "draft-8",
   legacyHeaders: false,
   message: { error: "Too many trade requests, please try again later" },
@@ -62,7 +74,10 @@ router.get("/", requireAuth, requireVerifiedEmail, portfolioReadLimiter, async (
   res.json(portfolio);
 });
 
-router.post("/trades", requireSafeOrigin, requireAuth, requireVerifiedEmail, portfolioTradeLimiter, async (req, res) => {
+// Every trade is tied to the authenticated user via portfolios.user_id
+// (portfolio_trades.portfolio_id → portfolios.user_id). Both limiters key
+// on userId so a single user cannot bypass them with concurrent requests.
+router.post("/trades", requireSafeOrigin, requireAuth, requireVerifiedEmail, portfolioTradeBurstLimiter, portfolioTradeLimiter, async (req, res) => {
   const body = req.body as Record<string, unknown>;
   const gameName = normalizeRiotSegment(body.gameName, 64);
   const tagLine = normalizeRiotSegment(body.tagLine, 16);

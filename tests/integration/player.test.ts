@@ -195,6 +195,106 @@ describe("player routes integration", () => {
     expect(confirmedRow.rows[0]?.source).toBe("confirmed");
   });
 
+  it("keeps sparse-anchor backfill swings conservative", async () => {
+    const inserted = await getPool().query<{ player_id: number }>(
+      `INSERT INTO players (game_name, tag_line, puuid, platform)
+       VALUES ('SparseSwing', 'NA1', 'puuid-sparse', 'na1')
+       RETURNING player_id`,
+    );
+    const playerId = inserted.rows[0].player_id;
+    const now = Date.now();
+    const olderAnchorAt = new Date(now - 10 * 24 * 60 * 60 * 1000);
+    const newerAnchorAt = new Date(now - 9 * 24 * 60 * 60 * 1000);
+
+    await getPool().query(
+      `INSERT INTO score_snapshots (
+         player_id,
+         score,
+         match_id,
+         game_ended_at,
+         source,
+         won,
+         recorded_at
+       )
+       VALUES
+         ($1, 1000, 'NA1_anchor_old', $2, 'confirmed', FALSE, $2),
+         ($1, 1100, 'NA1_anchor_new', $3, 'snapshot', TRUE, $3),
+         ($1, 1200, NULL, NULL, 'snapshot', NULL, NOW())`,
+      [playerId, olderAnchorAt, newerAnchorAt],
+    );
+
+    mockRiotFetchWith({
+      accountBody: { puuid: "puuid-sparse", gameName: "SparseSwing", tagLine: "NA1" },
+      matchIdsBody: ["NA1_402", "NA1_401"],
+    });
+
+    const refresh = await request(app).get("/api/player/SparseSwing/NA1?includeHistory=1&limit=20&refresh=1");
+    expect(refresh.status).toBe(200);
+
+    const rows = await getPool().query<{ match_id: string; score: number | null; source: string }>(
+      `SELECT match_id, score, source
+       FROM score_snapshots
+       WHERE player_id = $1
+         AND match_id IN ('NA1_402', 'NA1_401')
+       ORDER BY game_ended_at DESC`,
+      [playerId],
+    );
+    expect(rows.rowCount).toBe(2);
+    expect(rows.rows[0]?.source).toBe("confirmed");
+    expect(rows.rows[1]?.source).toBe("estimated");
+    expect(rows.rows[0]?.score).not.toBeNull();
+    expect(rows.rows[1]?.score).not.toBeNull();
+
+    const newestScore = rows.rows[0]?.score ?? 0;
+    const previousScore = rows.rows[1]?.score ?? 0;
+    expect(Math.abs(newestScore - previousScore)).toBeLessThanOrEqual(40);
+  });
+
+  it("does not write empty snapshots for unranked players without ranked matches", async () => {
+    mockRiotFetchWith({
+      accountBody: { puuid: "puuid-unranked-empty", gameName: "NoSoloRank", tagLine: "NA1" },
+      matchIdsBody: [],
+      leagueBody: [],
+    });
+
+    const firstRefresh = await request(app).get("/api/player/NoSoloRank/NA1?includeHistory=1&limit=20&refresh=1");
+    expect(firstRefresh.status).toBe(200);
+    expect(Array.isArray(firstRefresh.body.history)).toBe(true);
+    expect(firstRefresh.body.history).toHaveLength(0);
+
+    const playerRows = await getPool().query<{ player_id: number }>(
+      `SELECT player_id
+       FROM players
+       WHERE puuid = 'puuid-unranked-empty' AND platform = 'na1'`,
+    );
+    expect(playerRows.rowCount).toBe(1);
+    const playerId = playerRows.rows[0].player_id;
+
+    const snapshotRows = await getPool().query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM score_snapshots
+       WHERE player_id = $1`,
+      [playerId],
+    );
+    expect(Number(snapshotRows.rows[0].count)).toBe(0);
+
+    mockRiotFetchWith({
+      accountBody: { puuid: "puuid-unranked-empty", gameName: "NoSoloRank", tagLine: "NA1" },
+      matchIdsBody: [],
+      leagueBody: [],
+    });
+    const secondRefresh = await request(app).get("/api/player/NoSoloRank/NA1?includeHistory=1&limit=20&refresh=1");
+    expect(secondRefresh.status).toBe(200);
+
+    const snapshotRowsAfterSecond = await getPool().query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM score_snapshots
+       WHERE player_id = $1`,
+      [playerId],
+    );
+    expect(Number(snapshotRowsAfterSecond.rows[0].count)).toBe(0);
+  });
+
   it("does not sync snapshot-only players unless refresh is requested", async () => {
     const inserted = await getPool().query<{ player_id: number }>(
       `INSERT INTO players (game_name, tag_line, puuid, platform)

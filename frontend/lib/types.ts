@@ -1,4 +1,5 @@
 // Shared data shapes used across the frontend.
+import type { PortfolioConflictCode } from "../../backend/lib/portfolioConflictCodes.js";
 
 export interface RiotId {
   gameName: string;
@@ -40,6 +41,7 @@ export interface AuthUser {
 
 export interface ApiErrorBody {
   error?: string;
+  code?: PortfolioConflictCode | string;
 }
 
 export interface ProfileFieldChangeStatus {

@@ -3,11 +3,15 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { createApp } from "../../backend/app.ts";
 import { getPool } from "../../backend/db/index.ts";
 import { recordScoreSnapshot } from "../../backend/db/tables/scores.ts";
+import { PORTFOLIO_CONFLICT_CODES } from "../../backend/lib/portfolioConflictCodes.ts";
+import { resetAuthRateLimitsForTests } from "../../backend/routes/auth.ts";
+import { resetPortfolioRateLimitsForTests } from "../../backend/routes/portfolio.ts";
 import * as emailLib from "../../backend/lib/email.ts";
 import {
   TEST_PASSWORD,
   closeIntegrationDb,
   initIntegrationDb,
+  mockRiotFetchWith,
   resetIntegrationState,
   waitForCondition,
 } from "./helpers.ts";
@@ -21,6 +25,8 @@ describe("portfolio routes integration", () => {
 
   beforeEach(async () => {
     await resetIntegrationState();
+    resetAuthRateLimitsForTests();
+    resetPortfolioRateLimitsForTests();
   });
 
   afterAll(async () => {
@@ -77,6 +83,29 @@ describe("portfolio routes integration", () => {
     return playerId;
   }
 
+  function mockTradeRefreshForPlayer(
+    gameName: string,
+    tagLine: string,
+    { leaguePoints = 50, matchIdsBody = [] }: { leaguePoints?: number; matchIdsBody?: string[] } = {},
+  ): void {
+    mockRiotFetchWith({
+      accountBody: {
+        puuid: `puuid-${gameName}-${tagLine}`,
+        gameName,
+        tagLine,
+      },
+      leagueBody: [
+        {
+          queueType: "RANKED_SOLO_5x5",
+          tier: "GOLD",
+          rank: "II",
+          leaguePoints,
+        },
+      ],
+      matchIdsBody,
+    });
+  }
+
   it("requires authentication", async () => {
     const portfolio = await request(app).get("/api/portfolio");
     expect(portfolio.status).toBe(401);
@@ -126,6 +155,7 @@ describe("portfolio routes integration", () => {
     const agent = request.agent(app);
     await registerAgent(agent, "buyer_user", "buyer_user@example.com");
     await seedPlayerScore("Faker", "KR1", 1500);
+    mockTradeRefreshForPlayer("Faker", "KR1");
 
     const buy = await agent.post("/api/portfolio/trades").send({
       gameName: "Faker",
@@ -159,6 +189,7 @@ describe("portfolio routes integration", () => {
     const agent = request.agent(app);
     await registerAgent(agent, "seller_user", "seller_user@example.com");
     const playerId = await seedPlayerScore("SoldPlayer", "NA1", 1500);
+    mockTradeRefreshForPlayer("SoldPlayer", "NA1");
 
     const buy = await agent.post("/api/portfolio/trades").send({
       gameName: "SoldPlayer",
@@ -218,6 +249,7 @@ describe("portfolio routes integration", () => {
     const agent = request.agent(app);
     await registerAgent(agent, "low_cash_user", "low_cash_user@example.com");
     await seedPlayerScore("Expensive", "NA1", 30000);
+    mockTradeRefreshForPlayer("Expensive", "NA1");
 
     const buy = await agent.post("/api/portfolio/trades").send({
       gameName: "Expensive",
@@ -250,6 +282,7 @@ describe("portfolio routes integration", () => {
     const agent = request.agent(app);
     await registerAgent(agent, "short_sell_user", "short_sell_user@example.com");
     await seedPlayerScore("Holder", "NA1", 1000);
+    mockTradeRefreshForPlayer("Holder", "NA1");
 
     const buy = await agent.post("/api/portfolio/trades").send({
       gameName: "Holder",
@@ -275,6 +308,7 @@ describe("portfolio routes integration", () => {
     const agent = request.agent(app);
     await registerAgent(agent, "unranked_user", "unranked_user@example.com");
     await seedPlayerScore("Unranked", "NA1", null);
+    mockTradeRefreshForPlayer("Unranked", "NA1");
 
     const buy = await agent.post("/api/portfolio/trades").send({
       gameName: "Unranked",
@@ -291,6 +325,7 @@ describe("portfolio routes integration", () => {
     const agent = request.agent(app);
     await registerAgent(agent, "stale_price_user", "stale_price_user@example.com");
     const playerId = await seedPlayerScore("StalePrice", "NA1", 1500);
+    mockTradeRefreshForPlayer("StalePrice", "NA1");
 
     await getPool().query(
       `INSERT INTO score_snapshots (player_id, score, source, recorded_at)
@@ -317,14 +352,48 @@ describe("portfolio routes integration", () => {
       expectedPricePerShare: "1500.00",
     });
     expect(buy.status).toBe(409);
-    expect(buy.body.error).toContain("price per share has changed");
-    expect(buy.body.error).toContain("Refresh");
+    expect(buy.body.code).toBe(PORTFOLIO_CONFLICT_CODES.PRICE_CHANGED);
+    expect(String(buy.body.error ?? "")).toContain("Price changed while processing your order");
+  });
+
+  it("rejects trades when refresh discovers newer match history", async () => {
+    const agent = request.agent(app);
+    await registerAgent(agent, "history_shift_user", "history_shift_user@example.com");
+    const playerId = await seedPlayerScore("HistoryShift", "NA1", 1500);
+    mockTradeRefreshForPlayer("HistoryShift", "NA1", { matchIdsBody: ["NA1_99", "NA1_98"] });
+
+    const buy = await agent.post("/api/portfolio/trades").send({
+      gameName: "HistoryShift",
+      tagLine: "NA1",
+      side: "buy",
+      shares: "1",
+      expectedPricePerShare: "1500.00",
+    });
+    expect(buy.status).toBe(409);
+    expect(buy.body.code).toBe(PORTFOLIO_CONFLICT_CODES.HISTORY_CHANGED);
+    expect(String(buy.body.error ?? "")).toContain("Share history changed while processing your order");
+
+    const trades = await getPool().query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM portfolio_trades`,
+    );
+    expect(Number(trades.rows[0].count)).toBe(0);
+
+    const linkedSnapshots = await getPool().query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM score_snapshots
+       WHERE player_id = $1
+         AND match_id IS NOT NULL`,
+      [playerId],
+    );
+    expect(Number(linkedSnapshots.rows[0].count)).toBeGreaterThan(0);
   });
 
   it("concurrent sells cannot oversell shares beyond owned position", async () => {
     const agent = request.agent(app);
     await registerAgent(agent, "concurrent_sell_user", "concurrent_sell@example.com");
     await seedPlayerScore("ConcurrentSellTarget", "NA1", 1000);
+    mockTradeRefreshForPlayer("ConcurrentSellTarget", "NA1");
 
     const buy = await agent.post("/api/portfolio/trades").send({
       gameName: "ConcurrentSellTarget",
@@ -371,6 +440,7 @@ describe("portfolio routes integration", () => {
     await registerAgent(agent, "concurrent_buy_user", "concurrent_buy@example.com");
     // 40000 LP per share; each buy is within the 50000 balance, but two together are not.
     await seedPlayerScore("ExpensiveConcurrent", "NA1", 40000);
+    mockTradeRefreshForPlayer("ExpensiveConcurrent", "NA1");
 
     const [buy1, buy2] = await Promise.all([
       agent.post("/api/portfolio/trades").send({

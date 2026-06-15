@@ -27,8 +27,8 @@ const portfolioReadLimiter = rateLimit({
 });
 
 // Trade burst protection: max 5 submissions per 30 seconds per user.
-// Each trade now forces a live Riot API call; this caps per-user burst to
-// 5 Riot calls / 30 s regardless of how many accounts a single person controls.
+// Trades run the same sync path as player refresh, which may fan out into
+// multiple Riot calls (match-list + match fetches + league snapshot).
 const portfolioTradeBurstLimiter = rateLimit({
   windowMs: 30 * 1000,
   limit: 5,
@@ -47,6 +47,17 @@ const portfolioTradeLimiter = rateLimit({
   message: { error: "Too many trade requests, please try again later" },
   keyGenerator: (req) => String(req.user?.userId ?? "unauthenticated"),
 });
+
+export function resetPortfolioRateLimitsForTests(): void {
+  const keyCandidates = ["unauthenticated", ...Array.from({ length: 50 }, (_, index) => String(index + 1))];
+  const resetters = [portfolioReadLimiter, portfolioTradeBurstLimiter, portfolioTradeLimiter];
+
+  for (const limiter of resetters) {
+    for (const key of keyCandidates) {
+      limiter.resetKey(key);
+    }
+  }
+}
 
 function parseTradeSide(value: unknown): PortfolioTradeSide | null {
   if (value === "buy" || value === "sell") return value;

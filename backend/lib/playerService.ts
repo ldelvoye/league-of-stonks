@@ -12,7 +12,6 @@ import {
   getLeagueEntriesByPuuid,
   getMatchById,
   getRankedSoloMatchIdsByPuuid,
-  RiotApiError,
   type RiotMatch,
 } from "./riot.js";
 import { logger } from "./logger.js";
@@ -25,10 +24,6 @@ const MATCH_SYNC_DEPTH = 10;
 // requests collapse before resolvePlayer() reaches Riot account lookup.
 const activePlayerSyncs = new Map<string, Promise<number | null>>();
 
-// Single-flight map for trade-path league snapshots. Unlike activePlayerSyncs,
-// there is no cooldown — every trade always issues one fresh Riot league call.
-// Concurrent trades for the same player share a single in-flight request.
-const activeLeagueSnapshots = new Map<string, Promise<number | null>>();
 const LOBBY_SNAPSHOT_MAX_PLAYERS = 9;
 const DEFAULT_LP_SWING = 20;
 const MIN_LP_SWING = 8;
@@ -131,18 +126,19 @@ function inferMaxSwing(samples: SegmentSample[]): number {
 
   const strongSegmentCount = samples.filter((sample) => sample.strongAnchor).length;
   const sparseAnchors =
-    strongSegmentCount < STABLE_CONFIRMED_SEGMENTS && samples.length < SPARSE_ANCHOR_SAMPLE_COUNT;
+    strongSegmentCount < STABLE_CONFIRMED_SEGMENTS || samples.length < SPARSE_ANCHOR_SAMPLE_COUNT;
+  if (sparseAnchors) {
+    return MAX_LP_SWING_STABLE;
+  }
+
   const observedP85 = percentile(
     samples.map((sample) => sample.perGameSwing),
     0.85,
   );
   const observedCeiling = observedP85 ?? DEFAULT_LP_SWING;
 
-  // Placements/provisional MMR can swing much harder. Widen caps when anchor
-  // data is sparse so we do not flatten legitimate jumps.
-  const dynamicMax = sparseAnchors
-    ? Math.max(MAX_LP_SWING_STABLE, observedCeiling * 2.4, 60)
-    : Math.max(MAX_LP_SWING_STABLE, observedCeiling * 1.6);
+  // Widen only when we have enough anchors to support larger inferred swings.
+  const dynamicMax = Math.max(MAX_LP_SWING_STABLE, observedCeiling * 1.6);
 
   return Math.min(MAX_LP_SWING_PROVISIONAL, Math.round(dynamicMax));
 }
@@ -232,6 +228,10 @@ function inferLpEstimateProfile(historyDesc: Awaited<ReturnType<typeof getScoreH
     return { winGain: DEFAULT_LP_SWING, lossLoss: DEFAULT_LP_SWING };
   }
 
+  const strongSegmentCount = samples.filter((sample) => sample.strongAnchor).length;
+  const sparseAnchors =
+    strongSegmentCount < STABLE_CONFIRMED_SEGMENTS || samples.length < SPARSE_ANCHOR_SAMPLE_COUNT;
+
   const symmetricMedian = weightedMedian(
     samples.map((sample) => ({
       value: Math.abs(sample.delta) / Math.max(1, sample.wins + sample.losses),
@@ -258,7 +258,7 @@ function inferLpEstimateProfile(historyDesc: Awaited<ReturnType<typeof getScoreH
     r2 += w * c2 * sample.delta;
   }
 
-  const regularizationWeight = 0.6;
+  const regularizationWeight = sparseAnchors ? 2.5 : 0.6;
   m11 += regularizationWeight;
   m22 += regularizationWeight;
   r1 += regularizationWeight * baseline;
@@ -397,23 +397,14 @@ async function recordCurrentLeagueSnapshot(player: Player, platform: string): Pr
   const soloRanked = toSoloRanked(ranked);
   const score = soloRanked?.score ?? null;
 
+  if (score === null) {
+    await touchPlayer(player.playerId);
+    return null;
+  }
+
   await recordScoreSnapshot(player.playerId, score);
   await touchPlayer(player.playerId);
   return score;
-}
-
-async function getLeagueSnapshotDeduped(
-  player: Player,
-  platform: string,
-): Promise<number | null> {
-  const key = playerSyncKey(player.gameName, player.tagLine, platform);
-  const existing = activeLeagueSnapshots.get(key);
-  if (existing) return existing;
-  const snap = recordCurrentLeagueSnapshot(player, platform).finally(() => {
-    activeLeagueSnapshots.delete(key);
-  });
-  activeLeagueSnapshots.set(key, snap);
-  return snap;
 }
 
 async function refreshPlayerScoreIfNeeded(player: Player, platform: string): Promise<number | null> {
@@ -587,7 +578,10 @@ export async function getPlayerScore(
   gameName: string,
   tagLine: string,
   platform: string,
-  { refresh = false }: { refresh?: boolean } = {},
+  {
+    refresh = false,
+    allowStaleWhileSyncing = refresh,
+  }: { refresh?: boolean; allowStaleWhileSyncing?: boolean } = {},
 ): Promise<number | null> {
   if (!refresh) {
     const cached = await getCachedPlayerHistory(gameName, tagLine, platform, 1);
@@ -597,35 +591,8 @@ export async function getPlayerScore(
   }
 
   return refreshPlayerScoreDeduped(gameName, tagLine, platform, {
-    allowStaleWhileSyncing: refresh,
+    allowStaleWhileSyncing: refresh ? allowStaleWhileSyncing : false,
   });
-}
-
-/**
- * Fetches the live Riot LP for a player unconditionally (no cooldown), for use
- * at trade-execution time where price accuracy is critical. Always issues one
- * fresh `GET /league` Riot call; concurrent calls for the same player are
- * collapsed into a single in-flight request via single-flight deduplication.
- * Returns null if the player is not in the DB or is unranked.
- */
-export async function getPlayerScoreForTrade(
-  gameName: string,
-  tagLine: string,
-  platform: string,
-): Promise<number | null> {
-  const existing = await findPlayerByRiotId(gameName, tagLine, platform);
-  let player = existing;
-  if (!player) {
-    try {
-      player = await resolvePlayer(gameName, tagLine, platform);
-    } catch (error) {
-      if (error instanceof RiotApiError && error.status === 404) {
-        return null;
-      }
-      throw error;
-    }
-  }
-  return getLeagueSnapshotDeduped(player, platform);
 }
 
 /**

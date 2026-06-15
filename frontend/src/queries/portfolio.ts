@@ -16,7 +16,7 @@ export class PortfolioRequestError extends Error {
 
 export function parseApiErrorBody(value: unknown): ApiErrorBody | null {
   if (!value || typeof value !== "object") return null;
-  if (!("error" in value)) return null;
+  if (!("error" in value) && !("code" in value)) return null;
   return value as ApiErrorBody;
 }
 

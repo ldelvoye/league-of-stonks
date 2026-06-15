@@ -13,6 +13,7 @@ import type {
   RecentTrade,
   TopPerformer,
 } from "./types.js";
+import { PORTFOLIO_CONFLICT_CODES } from "../../backend/lib/portfolioConflictCodes.js";
 
 /**
  * Thrown by query/mutation functions when a credentialed request receives a
@@ -199,6 +200,17 @@ export function authErrorMessage(status: number, data: ApiErrorBody | null): str
 }
 
 export function portfolioErrorMessage(status: number, data: ApiErrorBody | null): string {
+  if (status === 409) {
+    if (data?.code === PORTFOLIO_CONFLICT_CODES.HISTORY_CHANGED) {
+      return "Share history changed while processing your order. Review the updated history and try again.";
+    }
+    if (data?.code === PORTFOLIO_CONFLICT_CODES.PRICE_CHANGED) {
+      return "Price changed while processing your order. Review the updated price and try again.";
+    }
+    if (data?.error) return data.error;
+    return "Market data changed while processing your order. Review the latest data and try again.";
+  }
+
   if (data?.error) return data.error;
   switch (status) {
     case 401:
@@ -207,8 +219,6 @@ export function portfolioErrorMessage(status: number, data: ApiErrorBody | null)
       return "Verify your email to access your portfolio.";
     case 404:
       return "Portfolio data was not found.";
-    case 409:
-      return "The price per share has changed. Use the Refresh button to load the latest price and try again.";
     case 429:
       return "Too many requests, please try again shortly.";
     case 0:

@@ -115,7 +115,10 @@ export function createApp() {
     }
 
     if (err instanceof PortfolioServiceError) {
-      res.status(err.status).json({ error: err.message });
+      res.status(err.status).json({
+        error: err.message,
+        ...(err.code ? { code: err.code } : {}),
+      });
       return;
     }
 

@@ -14,7 +14,12 @@ import {
 } from "../db/tables/portfolioTrades.js";
 import { findPortfolioByUserId } from "../db/tables/portfolios.js";
 import { findPlayerByRiotId } from "../db/tables/players.js";
-import { getPlayerScoreForTrade } from "./playerService.js";
+import { getLatestConfirmedMatchId } from "../db/tables/scores.js";
+import {
+  PORTFOLIO_CONFLICT_CODES,
+  type PortfolioConflictCode,
+} from "./portfolioConflictCodes.js";
+import { getPlayerScore } from "./playerService.js";
 
 type Queryable = Pick<Pool | PoolClient, "query">;
 
@@ -23,14 +28,20 @@ const PRICE_PER_SHARE_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 const TRADE_HISTORY_LIMIT = 40;
 
 export const PRICE_CHANGED_MESSAGE =
-  "The price per share has changed. Use the Refresh button to load the latest price and try again.";
+  "Price changed while processing your order. Review the updated price and try again.";
+export const SHARE_HISTORY_CHANGED_MESSAGE =
+  "Share history changed while processing your order. Review the updated history and try again.";
+
+export type PortfolioServiceErrorCode = PortfolioConflictCode;
 
 export class PortfolioServiceError extends Error {
   status: number;
+  code: PortfolioServiceErrorCode | null;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code: PortfolioServiceErrorCode | null = null) {
     super(message);
     this.status = status;
+    this.code = code;
     this.name = "PortfolioServiceError";
   }
 }
@@ -254,20 +265,41 @@ export async function executePortfolioTrade(
 ): Promise<ExecutePortfolioTradeResult> {
   const { userId, gameName, tagLine, platform, side, shares, expectedPricePerShare } = input;
 
-  const score = await getPlayerScoreForTrade(gameName, tagLine, platform);
+  const existingPlayer = await findPlayerByRiotId(gameName, tagLine, platform);
+  const latestConfirmedMatchIdBefore = existingPlayer
+    ? await getLatestConfirmedMatchId(existingPlayer.playerId)
+    : null;
+
+  const score = await getPlayerScore(gameName, tagLine, platform, {
+    refresh: true,
+    allowStaleWhileSyncing: false,
+  });
   if (score == null) {
     throw new PortfolioServiceError(400, "Player has no current price per share and cannot be traded.");
   }
   const pricePerShare = toMoneyString(score);
 
-  const db = getPool();
-  if ((await compareNumeric(db, expectedPricePerShare, pricePerShare)) !== 0) {
-    throw new PortfolioServiceError(409, PRICE_CHANGED_MESSAGE);
-  }
-
   const player = await findPlayerByRiotId(gameName, tagLine, platform);
   if (!player) {
     throw new PortfolioServiceError(404, "Player not found");
+  }
+
+  const latestConfirmedMatchIdAfter = await getLatestConfirmedMatchId(player.playerId);
+  if (latestConfirmedMatchIdAfter !== latestConfirmedMatchIdBefore) {
+    throw new PortfolioServiceError(
+      409,
+      SHARE_HISTORY_CHANGED_MESSAGE,
+      PORTFOLIO_CONFLICT_CODES.HISTORY_CHANGED,
+    );
+  }
+
+  const db = getPool();
+  if ((await compareNumeric(db, expectedPricePerShare, pricePerShare)) !== 0) {
+    throw new PortfolioServiceError(
+      409,
+      PRICE_CHANGED_MESSAGE,
+      PORTFOLIO_CONFLICT_CODES.PRICE_CHANGED,
+    );
   }
 
   const client = await getPool().connect();

@@ -44,8 +44,39 @@ export async function findPlayerByRiotId(
   return mapPlayer(rows[0]);
 }
 
+export async function findPlayerByPuuid(
+  puuid: string,
+  platform: string,
+): Promise<Player | null> {
+  const { rows } = await getPool().query(
+    `SELECT ${PLAYER_COLUMNS}
+     FROM players
+     WHERE puuid = $1 AND platform = $2
+     ORDER BY player_id ASC
+     LIMIT 1`,
+    [puuid, platform],
+  );
+
+  return mapPlayer(rows[0]);
+}
+
 export async function upsertPlayer(player: Omit<Player, "playerId" | "createdAt" | "updatedAt">): Promise<Player> {
   const { gameName, tagLine, puuid, platform } = player;
+  const existingByPuuid = await findPlayerByPuuid(puuid, platform);
+  if (existingByPuuid) {
+    const { rows } = await getPool().query(
+      `UPDATE players
+       SET game_name = $1,
+           tag_line = $2,
+           updated_at = NOW()
+       WHERE player_id = $3
+       RETURNING ${PLAYER_COLUMNS}`,
+      [gameName, tagLine, existingByPuuid.playerId],
+    );
+
+    return mapPlayer(rows[0]) as Player;
+  }
+
   const { rows } = await getPool().query(
     `INSERT INTO players (game_name, tag_line, puuid, platform)
      VALUES ($1, $2, $3, $4)

@@ -48,6 +48,40 @@ describe("player routes integration", () => {
     expect(countRiotFetchCalls(/\/lol\/league\/v4\/entries\/by-puuid\//)).toBe(1);
   });
 
+  it("reconciles renamed players by puuid without creating duplicate player rows", async () => {
+    const seeded = await getPool().query<{ player_id: number }>(
+      `INSERT INTO players (game_name, tag_line, puuid, platform)
+       VALUES ('OldName', 'NA1', 'puuid-rename', 'na1')
+       RETURNING player_id`,
+    );
+    const originalPlayerId = seeded.rows[0].player_id;
+
+    await getPool().query(
+      `INSERT INTO score_snapshots (player_id, score, match_id, game_ended_at, source, recorded_at)
+       VALUES ($1, 1500, 'NA1_SEED', NOW(), 'confirmed', NOW())`,
+      [originalPlayerId],
+    );
+
+    mockRiotFetchWith({
+      accountBody: { puuid: "puuid-rename", gameName: "NewName", tagLine: "NA1" },
+    });
+    const renamed = await request(app).get("/api/player/NewName/NA1?includeHistory=1&limit=20");
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.gameName).toBe("NewName");
+    expect(renamed.body.tagLine).toBe("NA1");
+
+    const rows = await getPool().query<{ player_id: number; game_name: string; tag_line: string }>(
+      `SELECT player_id, game_name, tag_line
+       FROM players
+       WHERE puuid = 'puuid-rename' AND platform = 'na1'`,
+    );
+    expect(rows.rowCount).toBe(1);
+    expect(rows.rows[0].player_id).toBe(originalPlayerId);
+    expect(rows.rows[0].game_name).toBe("NewName");
+    expect(rows.rows[0].tag_line).toBe("NA1");
+    expect(countRiotFetchCalls(/\/riot\/account\/v1\/accounts\/by-riot-id\//)).toBe(1);
+  });
+
   it("returns early when latest confirmed match is already known", async () => {
     mockRiotFetchWith({
       matchIdsBody: ["NA1_3", "NA1_2"],

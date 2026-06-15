@@ -12,6 +12,7 @@ import {
   getLeagueEntriesByPuuid,
   getMatchById,
   getRankedSoloMatchIdsByPuuid,
+  RiotApiError,
   type RiotMatch,
 } from "./riot.js";
 import { logger } from "./logger.js";
@@ -612,8 +613,18 @@ export async function getPlayerScoreForTrade(
   tagLine: string,
   platform: string,
 ): Promise<number | null> {
-  const player = await findPlayerByRiotId(gameName, tagLine, platform);
-  if (!player) return null;
+  const existing = await findPlayerByRiotId(gameName, tagLine, platform);
+  let player = existing;
+  if (!player) {
+    try {
+      player = await resolvePlayer(gameName, tagLine, platform);
+    } catch (error) {
+      if (error instanceof RiotApiError && error.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  }
   return getLeagueSnapshotDeduped(player, platform);
 }
 

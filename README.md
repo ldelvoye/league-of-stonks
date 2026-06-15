@@ -72,6 +72,7 @@ Typical local split workflow:
 - `npm run db:up` start local Postgres via Docker
 - `npm run db:migrate` apply schema/migrations using current `DATABASE_URL`
 - `npm run db:status` show applied vs pending migrations
+- `npm run db:schema` apply pending migrations, then refresh `backend/db/schema.snapshot.md`
 - `npm run db:seed` insert test player history data
 
 ## Riot API usage and cron costs

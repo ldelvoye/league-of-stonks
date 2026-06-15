@@ -84,7 +84,8 @@ export const config = {
   },
   // Max Riot calls consumed per 2-minute window before cron reduces/skips work.
   cronRiotBudgetThreshold(): number {
-    return envNum("CRON_RIOT_BUDGET_THRESHOLD", 66);
+    // 70 allows up to 3 discovery syncs (3 x 21 planned cost) with small headroom.
+    return envNum("CRON_RIOT_BUDGET_THRESHOLD", 70);
   },
 
   // ── CORS / origin policy ──────────────────────────────────────────────────

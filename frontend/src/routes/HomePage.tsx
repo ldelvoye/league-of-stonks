@@ -143,18 +143,20 @@ export function HomePage() {
                   <span className={`home-trade-side home-trade-side--${trade.side}`}>
                     {trade.side.toUpperCase()}
                   </span>
-                  <Link
-                    className="home-trade-player"
-                    to={buildPlayerRoute(trade.gameName, trade.tagLine)}
-                  >
-                    {trade.gameName}
-                    <span className="home-trade-tag">#{trade.tagLine}</span>
-                  </Link>
+                  <div className="home-trade-info">
+                    <Link
+                      className="home-trade-player"
+                      to={buildPlayerRoute(trade.gameName, trade.tagLine)}
+                    >
+                      {trade.gameName}
+                      <span className="home-trade-tag">#{trade.tagLine}</span>
+                    </Link>
+                    <span className="home-trade-time">{formatDate(trade.executedAt)}</span>
+                  </div>
                   <span className="home-trade-meta">
                     {formatShares(trade.shares) ?? "?"} sh @{" "}
                     {formatLpInt(trade.pricePerShare) ?? "?"} LP
                   </span>
-                  <span className="home-trade-time">{formatDate(trade.executedAt)}</span>
                 </li>
               ))}
             </ol>

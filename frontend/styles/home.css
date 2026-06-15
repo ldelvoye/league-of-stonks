@@ -298,10 +298,9 @@
 .home-trade-row {
   display: grid;
   grid-template-columns: 40px 1fr auto;
-  grid-template-rows: auto auto;
   align-items: center;
-  column-gap: 8px;
-  row-gap: 1px;
+  gap: 8px;
+  min-height: 42px;
   padding: 7px 10px;
   background: var(--bg-elev-2);
   border: 1px solid transparent;
@@ -314,7 +313,6 @@
 }
 
 .home-trade-side {
-  grid-row: 1 / -1;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -335,9 +333,15 @@
   border: 1px solid rgba(232, 64, 87, 0.35);
 }
 
+.home-trade-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .home-trade-player {
-  grid-column: 2;
-  grid-row: 1;
   display: flex;
   align-items: baseline;
   gap: 4px;
@@ -362,8 +366,6 @@
 }
 
 .home-trade-meta {
-  grid-column: 3;
-  grid-row: 1;
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 12px;
   color: var(--text-dim);
@@ -371,8 +373,6 @@
 }
 
 .home-trade-time {
-  grid-column: 2 / -1;
-  grid-row: 2;
   font-size: 11px;
   color: var(--text-faint);
 }

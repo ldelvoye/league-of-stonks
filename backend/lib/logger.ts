@@ -1,4 +1,10 @@
 export interface LogContext {
+  // Stable machine fields for filtering/alerting.
+  event?: string;
+  category?: string;
+  action?: string;
+  outcome?: string;
+  requestId?: string;
   [key: string]: unknown;
 }
 
@@ -105,6 +111,7 @@ function enqueueToDd(entry: Record<string, unknown>): void {
 
 function write(level: LogLevel, message: string, context?: LogContext): void {
   const entry = {
+    ...context,
     // `date` is Datadog's standard timestamp attribute (ISO 8601). Without it
     // Datadog stamps logs with ingestion time, shifting displayed timestamps.
     date: new Date().toISOString(),
@@ -119,7 +126,6 @@ function write(level: LogLevel, message: string, context?: LogContext): void {
     // `message` is Datadog's standard message attribute. Without it the Log
     // Explorer "Message" column shows the raw JSON blob instead of the string.
     message,
-    ...context,
   };
   const line = JSON.stringify(entry);
   // Route warn/error to stderr so they are separable from info in log aggregators.

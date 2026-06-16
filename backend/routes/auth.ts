@@ -278,7 +278,11 @@ router.post("/register", async (req, res) => {
 
   // Send verification email; don't block the response on delivery.
   issueVerificationEmail(userId, normalizedEmail).catch((err) => {
-    logger.error("failed to send verification email", {
+    logger.error("Verification email delivery failed", {
+      event: "auth.verification_email.failed",
+      category: "auth",
+      action: "send_verification_email",
+      outcome: "failure",
       userId,
       email: normalizedEmail,
       error: toErrorObj(err),
@@ -342,7 +346,11 @@ router.post("/forgot-password", async (req, res) => {
   const user = await findUserByEmail(normalizedEmail);
   if (user) {
     issuePasswordResetEmail(user.userId, user.email).catch((err) => {
-      logger.error("failed to send password reset email", {
+      logger.error("Password reset email delivery failed", {
+        event: "auth.password_reset_email.failed",
+        category: "auth",
+        action: "send_password_reset_email",
+        outcome: "failure",
         userId: user.userId,
         email: user.email,
         error: toErrorObj(err),

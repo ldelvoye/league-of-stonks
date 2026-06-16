@@ -37,13 +37,27 @@ export async function initDb(): Promise<pg.Pool> {
   });
 
   pool.on("error", (err) => {
-    logger.error("db idle client error", { error: toErrorObj(err) });
+    logger.error("Postgres idle client error", {
+      event: "db.pool.idle_client_error",
+      category: "db",
+      action: "pool",
+      outcome: "failure",
+      error: toErrorObj(err),
+    });
   });
 
   pool.on("connect", () => {
     const { totalCount, idleCount, waitingCount } = pool!;
     if (waitingCount > 0) {
-      logger.warn("db pool saturation", { totalCount, idleCount, waitingCount });
+      logger.warn("Postgres pool saturation detected", {
+        event: "db.pool.saturation",
+        category: "db",
+        action: "pool",
+        outcome: "degraded",
+        totalCount,
+        idleCount,
+        waitingCount,
+      });
     }
   });
 

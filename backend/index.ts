@@ -25,11 +25,24 @@ const app = createApp();
 const port = config.port();
 
 const server = app.listen(port, () => {
-  logger.info("server started", { port, env: config.nodeEnv() });
+  logger.info("Backend server started", {
+    event: "server.lifecycle.started",
+    category: "server",
+    action: "startup",
+    outcome: "success",
+    port,
+    env: config.nodeEnv(),
+  });
 });
 
 async function shutdown(signal: string): Promise<void> {
-  logger.info("shutdown initiated", { signal });
+  logger.info("Backend shutdown initiated", {
+    event: "server.lifecycle.shutdown_initiated",
+    category: "server",
+    action: "shutdown",
+    outcome: "started",
+    signal,
+  });
 
   // Stop background maintenance loops.
   clearInterval(sessionCleanupTimer);
@@ -43,7 +56,12 @@ async function shutdown(signal: string): Promise<void> {
   });
 
   await closeDb();
-  logger.info("shutdown complete");
+  logger.info("Backend shutdown completed", {
+    event: "server.lifecycle.shutdown_completed",
+    category: "server",
+    action: "shutdown",
+    outcome: "success",
+  });
   // Flush any buffered log entries to Datadog before the process exits.
   await flushDdLogs();
   process.exit(0);

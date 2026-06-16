@@ -61,13 +61,21 @@ export function createApp() {
 
     res.on("finish", () => {
       const durationMs = Date.now() - startMs;
-      const logFn = res.statusCode >= 500 ? logger.error : logger.info;
+      const statusCode = res.statusCode;
+      const logFn = statusCode >= 500 ? logger.error : logger.info;
       const statusClass = `${Math.floor(res.statusCode / 100)}xx`;
-      logFn("request", {
+      const outcome = statusCode >= 500 ? "failure" : statusCode >= 400 ? "client_error" : "success";
+      const message = statusCode >= 500 ? "HTTP request failed" : "HTTP request completed";
+      const event = statusCode >= 500 ? "http.request.failed" : "http.request.completed";
+      logFn(message, {
+        event,
+        category: "http",
+        action: "request",
+        outcome,
         requestId,
         method: requestMethod,
         path: requestPath,
-        status: res.statusCode,
+        status: statusCode,
         statusClass,
         durationMs,
         ip: requestIp,
@@ -94,7 +102,11 @@ export function createApp() {
     if (err instanceof RiotApiError) {
       const status = riotErrorStatus(err.status);
       if (err.status === 429) {
-        logger.warn("riot rate limit hit", {
+        logger.warn("Riot API rate limit encountered", {
+          event: "riot.request.rate_limited",
+          category: "riot",
+          action: "request",
+          outcome: "rate_limited",
           requestId,
           step: err.step,
           riotStatus: err.status,
@@ -102,7 +114,11 @@ export function createApp() {
           path: req.originalUrl,
         });
       } else {
-        logger.error("riot api error", {
+        logger.error("Riot API request failed", {
+          event: "riot.request.failed",
+          category: "riot",
+          action: "request",
+          outcome: "failure",
           requestId,
           step: err.step,
           riotStatus: err.status,
@@ -115,6 +131,22 @@ export function createApp() {
     }
 
     if (err instanceof PortfolioServiceError) {
+      const logFn = err.status >= 500 ? logger.error : logger.warn;
+      const outcome = err.status >= 500 ? "failure" : "rejected";
+      const event = err.status >= 500 ? "portfolio.request.failed" : "portfolio.request.rejected";
+      const message = err.status >= 500 ? "Portfolio request failed" : "Portfolio request rejected";
+      logFn(message, {
+        event,
+        category: "portfolio",
+        action: "request",
+        outcome,
+        requestId,
+        method: req.method,
+        path: req.originalUrl,
+        status: err.status,
+        ...(err.code ? { code: err.code } : {}),
+        error: { kind: err.name, message: err.message },
+      });
       res.status(err.status).json({
         error: err.message,
         ...(err.code ? { code: err.code } : {}),
@@ -122,7 +154,11 @@ export function createApp() {
       return;
     }
 
-    logger.error("unhandled error", {
+    logger.error("Unhandled request error", {
+      event: "http.request.unhandled_error",
+      category: "http",
+      action: "request",
+      outcome: "failure",
       requestId,
       method: req.method,
       path: req.originalUrl,

@@ -469,7 +469,11 @@ async function refreshPlayerScoreIfNeeded(player: Player, platform: string): Pro
   await touchPlayer(player.playerId);
 
   const lobbySnapshots = await snapshotLatestLobbyPlayers(matches[0], player, platform);
-  logger.info("player sync complete", {
+  logger.info("Player sync completed", {
+    event: "player.sync.completed",
+    category: "player",
+    action: "sync",
+    outcome: "success",
     playerId: player.playerId,
     platform,
     pendingMatches: pendingMatchIds.length,

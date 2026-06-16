@@ -146,15 +146,39 @@ async function riotFetch<T>(url: string, step: string): Promise<T> {
 
   if (!response.ok) {
     if (was429) {
-      logger.warn("riot rate limit", { step, riotStatus: response.status, latencyMs });
+      logger.warn("Riot API request rate limited", {
+        event: "riot.request.rate_limited",
+        category: "riot",
+        action: "request",
+        outcome: "rate_limited",
+        step,
+        riotStatus: response.status,
+        latencyMs,
+      });
     } else {
-      logger.error("riot api error", { step, riotStatus: response.status, latencyMs });
+      logger.error("Riot API request failed", {
+        event: "riot.request.failed",
+        category: "riot",
+        action: "request",
+        outcome: "failure",
+        step,
+        riotStatus: response.status,
+        latencyMs,
+      });
     }
     throw new RiotApiError(step, response.status, data);
   }
 
   if (!isHighVolumeStep(step) || config.logVerboseRiotRequests()) {
-    logger.info("riot request", { step, riotStatus: response.status, latencyMs });
+    logger.info("Riot API request succeeded", {
+      event: "riot.request.succeeded",
+      category: "riot",
+      action: "request",
+      outcome: "success",
+      step,
+      riotStatus: response.status,
+      latencyMs,
+    });
   }
   return data as T;
 }

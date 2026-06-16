@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { logger } from "./logger.js";
 
 function getResendClient(): Resend {
   const apiKey = process.env.RESEND_API_KEY;
@@ -21,7 +22,14 @@ export async function sendVerificationEmail(toEmail: string, rawToken: string): 
 
   if (!process.env.RESEND_API_KEY) {
     // Dev fallback: log the link so development works without a real API key.
-    console.log(`[dev] Verification link for ${toEmail}: ${link}`);
+    logger.info("Verification email skipped; dev fallback link generated", {
+      event: "auth.verification_email.dev_fallback",
+      category: "auth",
+      action: "send_verification_email",
+      outcome: "skipped",
+      email: toEmail,
+      verificationLink: link,
+    });
     return;
   }
 
@@ -48,7 +56,14 @@ export async function sendPasswordResetEmail(toEmail: string, rawToken: string):
 
   if (!process.env.RESEND_API_KEY) {
     // Dev fallback: log the link so development works without a real API key.
-    console.log(`[dev] Password reset link for ${toEmail}: ${link}`);
+    logger.info("Password reset email skipped; dev fallback link generated", {
+      event: "auth.password_reset_email.dev_fallback",
+      category: "auth",
+      action: "send_password_reset_email",
+      outcome: "skipped",
+      email: toEmail,
+      passwordResetLink: link,
+    });
     return;
   }
 

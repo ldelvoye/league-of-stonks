@@ -57,7 +57,11 @@ export class MemoryCache {
    * Call periodically or on-demand from an observability endpoint.
    */
   logMetrics(label: string): void {
-    logger.info("cache metrics", {
+    logger.info("Cache metrics snapshot", {
+      event: "cache.metrics.snapshot",
+      category: "cache",
+      action: "metrics",
+      outcome: "success",
       label,
       hits: this.hits,
       misses: this.misses,

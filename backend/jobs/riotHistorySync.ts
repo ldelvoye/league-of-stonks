@@ -50,7 +50,11 @@ export async function runLeaderboardSync(): Promise<SyncJobResult> {
   const initialStats = getRiotUsageStats();
 
   if (initialStats.last2mTotal >= budgetThreshold) {
-    logger.warn("cron leaderboard sync skipped: riot budget threshold reached", {
+    logger.warn("Cron leaderboard sync skipped due to Riot budget threshold", {
+      event: "cron.leaderboard_sync.skipped_budget",
+      category: "cron",
+      action: "leaderboard_sync",
+      outcome: "skipped",
       last2mTotal: initialStats.last2mTotal,
       threshold: budgetThreshold,
     });
@@ -82,7 +86,11 @@ export async function runLeaderboardSync(): Promise<SyncJobResult> {
       synced += 1;
     } catch (err) {
       failed += 1;
-      logger.error("cron leaderboard sync: player sync failed", {
+      logger.error("Cron leaderboard player sync failed", {
+        event: "cron.leaderboard_sync.player_failed",
+        category: "cron",
+        action: "leaderboard_sync",
+        outcome: "failure",
         gameName: performer.gameName,
         tagLine: performer.tagLine,
         error: toErrorObj(err),
@@ -96,7 +104,11 @@ export async function runLeaderboardSync(): Promise<SyncJobResult> {
     try {
       await refreshLeaderboard();
     } catch (err) {
-      logger.error("cron leaderboard sync: leaderboard refresh failed", {
+      logger.error("Cron leaderboard refresh failed after sync", {
+        event: "cron.leaderboard_sync.refresh_failed",
+        category: "cron",
+        action: "leaderboard_sync",
+        outcome: "failure",
         error: toErrorObj(err),
       });
     }
@@ -113,7 +125,13 @@ export async function runLeaderboardSync(): Promise<SyncJobResult> {
     riotStats: getRiotUsageStats(),
   };
 
-  logger.info("cron leaderboard sync complete", { ...result });
+  logger.info("Cron leaderboard sync completed", {
+    event: "cron.leaderboard_sync.completed",
+    category: "cron",
+    action: "leaderboard_sync",
+    outcome: failed > 0 ? "partial" : "success",
+    ...result,
+  });
   return result;
 }
 
@@ -135,7 +153,11 @@ export async function runRandomDiscoverySync(): Promise<SyncJobResult> {
   const initialStats = getRiotUsageStats();
 
   if (initialStats.last2mTotal >= budgetThreshold) {
-    logger.warn("cron random discovery skipped: riot budget threshold reached", {
+    logger.warn("Cron random discovery sync skipped due to Riot budget threshold", {
+      event: "cron.random_discovery.skipped_budget",
+      category: "cron",
+      action: "random_discovery_sync",
+      outcome: "skipped",
       last2mTotal: initialStats.last2mTotal,
       threshold: budgetThreshold,
     });
@@ -165,7 +187,11 @@ export async function runRandomDiscoverySync(): Promise<SyncJobResult> {
     } catch (err) {
       failed += 1;
       failedIds.push(candidate.playerId);
-      logger.error("cron random discovery: player sync failed", {
+      logger.error("Cron random discovery player sync failed", {
+        event: "cron.random_discovery.player_failed",
+        category: "cron",
+        action: "random_discovery_sync",
+        outcome: "failure",
         gameName: candidate.gameName,
         tagLine: candidate.tagLine,
         error: toErrorObj(err),
@@ -177,7 +203,11 @@ export async function runRandomDiscoverySync(): Promise<SyncJobResult> {
     try {
       await refreshLeaderboard();
     } catch (err) {
-      logger.error("cron random discovery: leaderboard refresh failed", {
+      logger.error("Cron leaderboard refresh failed after random discovery sync", {
+        event: "cron.random_discovery.refresh_failed",
+        category: "cron",
+        action: "random_discovery_sync",
+        outcome: "failure",
         error: toErrorObj(err),
       });
     }
@@ -194,6 +224,12 @@ export async function runRandomDiscoverySync(): Promise<SyncJobResult> {
     riotStats: getRiotUsageStats(),
   };
 
-  logger.info("cron random discovery complete", { ...result });
+  logger.info("Cron random discovery sync completed", {
+    event: "cron.random_discovery.completed",
+    category: "cron",
+    action: "random_discovery_sync",
+    outcome: failed > 0 ? "partial" : "success",
+    ...result,
+  });
   return result;
 }

@@ -2,6 +2,7 @@ import { Router, type RequestHandler } from "express";
 import { runLeaderboardSync, runRandomDiscoverySync } from "../jobs/riotHistorySync.js";
 import { getRiotUsageStats } from "../lib/riot.js";
 import { config } from "../lib/config.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -14,7 +15,18 @@ const router = Router();
  */
 const requireCronSecret: RequestHandler = (req, res, next) => {
   const secret = config.cronSecret();
+  const requestId = res.locals.requestId as string | undefined;
   if (!secret) {
+    logger.warn("Cron endpoint unavailable: CRON_SECRET is not configured", {
+      event: "jobs.auth.disabled",
+      category: "jobs",
+      action: "authorize",
+      outcome: "disabled",
+      requestId,
+      method: req.method,
+      path: req.originalUrl,
+      ip: req.ip,
+    });
     res.status(503).json({ error: "Cron jobs are not configured on this server" });
     return;
   }
@@ -22,6 +34,16 @@ const requireCronSecret: RequestHandler = (req, res, next) => {
   const auth = req.headers.authorization ?? "";
   const provided = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   if (!provided || provided !== secret) {
+    logger.warn("Cron endpoint authorization failed", {
+      event: "jobs.auth.failed",
+      category: "jobs",
+      action: "authorize",
+      outcome: "unauthorized",
+      requestId,
+      method: req.method,
+      path: req.originalUrl,
+      ip: req.ip,
+    });
     res.status(401).json({ error: "Unauthorized" });
     return;
   }

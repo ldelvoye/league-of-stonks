@@ -10,12 +10,26 @@ function scheduleCleanupJob(
   run: () => Promise<void>,
 ): NodeJS.Timeout {
   run().catch((err) => {
-    logger.error("cleanup job failed", { job, error: toErrorObj(err) });
+    logger.error("Background cleanup job failed", {
+      event: "jobs.cleanup.failed",
+      category: "jobs",
+      action: "cleanup",
+      outcome: "failure",
+      job,
+      error: toErrorObj(err),
+    });
   });
 
   const timer = setInterval(() => {
     run().catch((err) => {
-      logger.error("cleanup job failed", { job, error: toErrorObj(err) });
+      logger.error("Background cleanup job failed", {
+        event: "jobs.cleanup.failed",
+        category: "jobs",
+        action: "cleanup",
+        outcome: "failure",
+        job,
+        error: toErrorObj(err),
+      });
     });
   }, DAILY_CLEANUP_INTERVAL_MS);
 

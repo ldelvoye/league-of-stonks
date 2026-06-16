@@ -1,6 +1,6 @@
 import pg from "pg";
 import { config } from "../lib/config.js";
-import { logger } from "../lib/logger.js";
+import { logger, toErrorObj } from "../lib/logger.js";
 
 const { Pool } = pg;
 
@@ -37,7 +37,7 @@ export async function initDb(): Promise<pg.Pool> {
   });
 
   pool.on("error", (err) => {
-    logger.error("db idle client error", { message: err.message });
+    logger.error("db idle client error", { error: toErrorObj(err) });
   });
 
   pool.on("connect", () => {

@@ -9,7 +9,7 @@ import jobsRouter from "./routes/jobs.js";
 import { RiotApiError } from "./lib/riot.js";
 import { PortfolioServiceError } from "./lib/portfolioService.js";
 import { config } from "./lib/config.js";
-import { logger } from "./lib/logger.js";
+import { logger, toErrorObj } from "./lib/logger.js";
 
 function riotErrorStatus(riotStatus: number): number {
   if (riotStatus === 404) return 404;
@@ -126,7 +126,7 @@ export function createApp() {
       requestId,
       method: req.method,
       path: req.originalUrl,
-      err: err instanceof Error ? { message: err.message, stack: err.stack } : String(err),
+      error: toErrorObj(err),
     });
 
     res.status(500).json({ error: "Internal server error" });

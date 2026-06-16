@@ -10,7 +10,7 @@ import {
 } from "./jobs/backgroundCleanup.js";
 import { scheduleLeaderboardRefresh } from "./jobs/leaderboardRefresh.js";
 import { config, validateConfig } from "./lib/config.js";
-import { logger } from "./lib/logger.js";
+import { logger, flushDdLogs } from "./lib/logger.js";
 
 // Fail fast on missing required environment variables before any DB or HTTP work.
 validateConfig();
@@ -44,6 +44,8 @@ async function shutdown(signal: string): Promise<void> {
 
   await closeDb();
   logger.info("shutdown complete");
+  // Flush any buffered log entries to Datadog before the process exits.
+  await flushDdLogs();
   process.exit(0);
 }
 

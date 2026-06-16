@@ -43,7 +43,7 @@ import {
 } from "../lib/auth.js";
 import { formatRetryAfter, getProfileChangeCooldown } from "../lib/cooldown.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../lib/email.js";
-import { logger } from "../lib/logger.js";
+import { logger, toErrorObj } from "../lib/logger.js";
 
 const router = Router();
 const BASIC_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -281,7 +281,7 @@ router.post("/register", async (req, res) => {
     logger.error("failed to send verification email", {
       userId,
       email: normalizedEmail,
-      err: err instanceof Error ? { message: err.message, stack: err.stack } : String(err),
+      error: toErrorObj(err),
     });
   });
 
@@ -345,7 +345,7 @@ router.post("/forgot-password", async (req, res) => {
       logger.error("failed to send password reset email", {
         userId: user.userId,
         email: user.email,
-        err: err instanceof Error ? { message: err.message, stack: err.stack } : String(err),
+        error: toErrorObj(err),
       });
     });
   }

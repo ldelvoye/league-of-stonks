@@ -1,28 +1,21 @@
 import { purgeExpiredVerificationTokens } from "../db/tables/emailVerification.js";
 import { purgeExpiredPasswordResetTokens } from "../db/tables/passwordReset.js";
 import { purgeExpiredSessions } from "../db/tables/sessions.js";
-import { logger } from "../lib/logger.js";
+import { logger, toErrorObj } from "../lib/logger.js";
 
 const DAILY_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
-
-function toErrorContext(err: unknown): { message: string; stack?: string } {
-  if (err instanceof Error) {
-    return { message: err.message, stack: err.stack };
-  }
-  return { message: String(err) };
-}
 
 function scheduleCleanupJob(
   job: "session_cleanup" | "email_verification_cleanup" | "password_reset_cleanup",
   run: () => Promise<void>,
 ): NodeJS.Timeout {
   run().catch((err) => {
-    logger.error("cleanup job failed", { job, err: toErrorContext(err) });
+    logger.error("cleanup job failed", { job, error: toErrorObj(err) });
   });
 
   const timer = setInterval(() => {
     run().catch((err) => {
-      logger.error("cleanup job failed", { job, err: toErrorContext(err) });
+      logger.error("cleanup job failed", { job, error: toErrorObj(err) });
     });
   }, DAILY_CLEANUP_INTERVAL_MS);
 

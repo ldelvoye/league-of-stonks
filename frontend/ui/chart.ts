@@ -97,10 +97,11 @@ function inferAbnormalTransitionDelta(points: Snapshot[]): number {
     .filter((pair) => !isMixedSnapshotConfirmedTransition(pair.previous, pair.next))
     .map((pair) => Math.abs((pair.next.score as number) - (pair.previous.score as number)));
 
-  const fallbackDeltas = transitions.map((pair) =>
-    Math.abs((pair.next.score as number) - (pair.previous.score as number)),
-  );
-  const typicalDelta = median(regularDeltas) ?? median(fallbackDeltas) ?? 20;
+  // When all transitions are mixed snapshot<->confirmed there are no regular
+  // deltas to derive a baseline from, so use a small fixed default. Using the
+  // mixed deltas themselves as fallback would make the threshold proportional
+  // to the jump we are trying to flag, guaranteeing it never triggers.
+  const typicalDelta = median(regularDeltas) ?? 20;
   return Math.max(45, Math.min(140, Math.round(typicalDelta * 2.6)));
 }
 

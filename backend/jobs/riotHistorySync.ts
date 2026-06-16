@@ -3,7 +3,7 @@ import { queryRandomStalePlayers } from "../db/tables/players.js";
 import { syncPlayerForCron } from "../lib/playerService.js";
 import { getRiotUsageStats, type RiotUsageStats } from "../lib/riot.js";
 import { config } from "../lib/config.js";
-import { logger } from "../lib/logger.js";
+import { logger, toErrorObj } from "../lib/logger.js";
 
 export type SyncMode = "leaderboard" | "random-discovery";
 
@@ -16,11 +16,6 @@ export interface SyncJobResult {
   durationMs: number;
   budgetConstrained: boolean;
   riotStats: RiotUsageStats;
-}
-
-function toErrorContext(err: unknown): { message: string; stack?: string } {
-  if (err instanceof Error) return { message: err.message, stack: err.stack };
-  return { message: String(err) };
 }
 
 // ── Per-player Riot API cost estimates ────────────────────────────────────────
@@ -90,7 +85,7 @@ export async function runLeaderboardSync(): Promise<SyncJobResult> {
       logger.error("cron leaderboard sync: player sync failed", {
         gameName: performer.gameName,
         tagLine: performer.tagLine,
-        err: toErrorContext(err),
+        error: toErrorObj(err),
       });
     }
   }
@@ -102,7 +97,7 @@ export async function runLeaderboardSync(): Promise<SyncJobResult> {
       await refreshLeaderboard();
     } catch (err) {
       logger.error("cron leaderboard sync: leaderboard refresh failed", {
-        err: toErrorContext(err),
+        error: toErrorObj(err),
       });
     }
   }
@@ -173,7 +168,7 @@ export async function runRandomDiscoverySync(): Promise<SyncJobResult> {
       logger.error("cron random discovery: player sync failed", {
         gameName: candidate.gameName,
         tagLine: candidate.tagLine,
-        err: toErrorContext(err),
+        error: toErrorObj(err),
       });
     }
   }
@@ -183,7 +178,7 @@ export async function runRandomDiscoverySync(): Promise<SyncJobResult> {
       await refreshLeaderboard();
     } catch (err) {
       logger.error("cron random discovery: leaderboard refresh failed", {
-        err: toErrorContext(err),
+        error: toErrorObj(err),
       });
     }
   }

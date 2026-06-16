@@ -2,6 +2,7 @@ import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../backend/app.ts";
 import { getPool } from "../../backend/db/index.ts";
+import { recordMatchScoreSnapshot } from "../../backend/db/tables/scores.ts";
 import {
   closeIntegrationDb,
   countRiotFetchCalls,
@@ -248,6 +249,38 @@ describe("player routes integration", () => {
     const newestScore = rows.rows[0]?.score ?? 0;
     const previousScore = rows.rows[1]?.score ?? 0;
     expect(Math.abs(newestScore - previousScore)).toBeLessThanOrEqual(40);
+  });
+
+  it("rounds decimal match snapshot scores before persistence", async () => {
+    const inserted = await getPool().query<{ player_id: number }>(
+      `INSERT INTO players (game_name, tag_line, puuid, platform)
+       VALUES ('DecimalScore', 'NA1', 'puuid-decimal-score', 'na1')
+       RETURNING player_id`,
+    );
+    const playerId = inserted.rows[0].player_id;
+
+    const snapshot = await recordMatchScoreSnapshot({
+      playerId,
+      matchId: "NA1_decimal_rounding",
+      score: 718.0793650793651,
+      gameEndedAt: new Date(),
+      source: "estimated",
+      won: true,
+      championName: "Ahri",
+      queueId: 420,
+    });
+
+    expect(snapshot.score).toBe(718);
+
+    const stored = await getPool().query<{ score: number | null }>(
+      `SELECT score
+       FROM score_snapshots
+       WHERE player_id = $1
+         AND match_id = $2`,
+      [playerId, "NA1_decimal_rounding"],
+    );
+    expect(stored.rowCount).toBe(1);
+    expect(stored.rows[0]?.score).toBe(718);
   });
 
   it("does not write empty snapshots for unranked players without ranked matches", async () => {

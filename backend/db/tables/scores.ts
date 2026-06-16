@@ -47,6 +47,16 @@ function mapScoreSnapshot(row: Record<string, unknown>): ScoreSnapshot {
   };
 }
 
+function normalizeScoreForStorage(score: number | null): number | null {
+  if (score === null) {
+    return null;
+  }
+  if (!Number.isFinite(score)) {
+    throw new TypeError("score must be a finite number");
+  }
+  return Math.round(score);
+}
+
 // Keeps player_latest_scores in sync after any snapshot write.
 // Only advances the row when the new effective time is >= the stored one, so
 // out-of-order historical inserts do not clobber a more recent score.
@@ -75,11 +85,12 @@ export async function recordScoreSnapshot(
   score: number | null,
 ): Promise<ScoreSnapshot> {
   const db = getPool();
+  const normalizedScore = normalizeScoreForStorage(score);
   const { rows } = await db.query(
     `INSERT INTO score_snapshots (player_id, score, source)
      VALUES ($1, $2, 'snapshot')
      RETURNING ${SCORE_SNAPSHOT_SELECT}`,
-    [playerId, score],
+    [playerId, normalizedScore],
   );
 
   const snap = mapScoreSnapshot(rows[0]);
@@ -101,6 +112,7 @@ export interface MatchScoreSnapshotInput {
 export async function recordMatchScoreSnapshot(input: MatchScoreSnapshotInput): Promise<ScoreSnapshot> {
   const { playerId, matchId, score, gameEndedAt, source, won = null, championName = null, queueId = null } =
     input;
+  const normalizedScore = normalizeScoreForStorage(score);
 
   const db = getPool();
   const { rows } = await db.query(
@@ -137,7 +149,7 @@ export async function recordMatchScoreSnapshot(input: MatchScoreSnapshotInput): 
        champion_name = COALESCE(score_snapshots.champion_name, EXCLUDED.champion_name),
        queue_id = COALESCE(score_snapshots.queue_id, EXCLUDED.queue_id)
      RETURNING ${SCORE_SNAPSHOT_SELECT}`,
-    [playerId, score, gameEndedAt, matchId, gameEndedAt, source, won, championName, queueId],
+    [playerId, normalizedScore, gameEndedAt, matchId, gameEndedAt, source, won, championName, queueId],
   );
 
   const snap = mapScoreSnapshot(rows[0]);

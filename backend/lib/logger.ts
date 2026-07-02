@@ -34,15 +34,60 @@ function buildStaticTags(): string {
 
 const DD_TAGS = buildStaticTags();
 
+// node-postgres (pg) DatabaseError instances carry a SQLSTATE `code` plus rich
+// locus fields that pinpoint the failing statement. Surfacing them turns an
+// opaque "numeric field overflow" into an actionable log (e.g. code 22003 with a
+// `detail` naming the precision/scale that overflowed). Duck-typed rather than
+// importing pg so the logger stays dependency-free.
+const PG_ERROR_FIELDS = [
+  "code",
+  "detail",
+  "hint",
+  "schema",
+  "table",
+  "column",
+  "constraint",
+  "dataType",
+  "routine",
+  "where",
+] as const;
+
+function extractDbErrorFields(err: Error): Record<string, string> | undefined {
+  const record = err as unknown as Record<string, unknown>;
+  // pg errors always set both `severity` and a SQLSTATE `code`. Gating on both
+  // avoids mislabeling Node system errors (which also expose `code`, e.g.
+  // "ENOENT") as database errors.
+  if (typeof record.code !== "string" || typeof record.severity !== "string") {
+    return undefined;
+  }
+  const fields: Record<string, string> = { severity: record.severity };
+  for (const key of PG_ERROR_FIELDS) {
+    const value = record[key];
+    if (typeof value === "string" && value.length > 0) {
+      fields[key] = value;
+    }
+  }
+  return fields;
+}
+
 // Returns an object shaped for Datadog's standard error attributes
 // (error.kind, error.message, error.stack). Import and spread as
-// `{ error: toErrorObj(caught) }` on any logger.error call site.
-export function toErrorObj(err: unknown): { kind: string; message: string; stack?: string } {
+// `{ error: toErrorObj(caught) }` on any logger.error call site. When the error
+// originates from Postgres, a `db` sub-object with SQLSTATE + locus fields is
+// attached.
+export function toErrorObj(err: unknown): {
+  kind: string;
+  message: string;
+  stack?: string;
+  db?: Record<string, string>;
+} {
   if (err instanceof Error) {
+    const db = extractDbErrorFields(err);
     return {
       kind: err.constructor.name || "Error",
       message: err.message,
       stack: err.stack,
+      ...(db ? { db } : {}),
     };
   }
   return { kind: "unknown", message: String(err) };

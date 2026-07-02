@@ -103,6 +103,9 @@ export function PlayerTradePanel({
   const availableBalance = toNumeric(portfolioQuery.data?.lpBalance);
 
   const showInvalidSharesHint = sharesInput.trim().length > 0 && !tradeSharesValue;
+  // A player worth 0 LP has a price per share of 0, so buys are free and can
+  // never be filled meaningfully. Selling remains allowed so holders can exit.
+  const priceIsZero = tradePriceScore != null && tradePriceScore <= 0;
   const buyInsufficientBalance =
     tradeSharesValue != null &&
     tradePriceScore != null &&
@@ -116,16 +119,19 @@ export function PlayerTradePanel({
     ? "Enter shares as a positive number with up to 3 decimals."
     : tradePriceScore == null
       ? "Trading is disabled while this player has no current price per share."
-      : buyInsufficientBalance
-        ? "Insufficient available balance for this buy order."
-        : sellInsufficientShares
-          ? `You can sell up to ${formatShares(ownedShares) ?? "0"} shares.`
-          : null;
+      : priceIsZero
+        ? "This player is worth 0 LP and can't be bought right now."
+        : buyInsufficientBalance
+          ? "Insufficient available balance for this buy order."
+          : sellInsufficientShares
+            ? `You can sell up to ${formatShares(ownedShares) ?? "0"} shares.`
+            : null;
 
   const buyDisabled =
     tradeBusySide !== null ||
     !tradeSharesValue ||
     tradePriceScore == null ||
+    priceIsZero ||
     availableBalance == null ||
     estimatedOrderValue == null ||
     estimatedOrderValue > availableBalance;
@@ -140,6 +146,7 @@ export function PlayerTradePanel({
   const onTrade = (side: PortfolioTradeSide) => {
     const shares = normalizeSharesInput(sharesInput);
     if (!shares || tradePriceScore == null) return;
+    if (side === "buy" && tradePriceScore <= 0) return;
     void handleTrade(side, shares, toPricePerShareString(tradePriceScore));
   };
 

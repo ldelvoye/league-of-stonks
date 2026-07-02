@@ -277,6 +277,16 @@ export async function executePortfolioTrade(
   if (score == null) {
     throw new PortfolioServiceError(400, "Player has no current price per share and cannot be traded.");
   }
+  // A 0 LP player has a price per share of 0, which makes buys free (totalValue
+  // rounds to 0 so the balance check always passes). Unbounded free shares can
+  // later overflow numeric(18,2) market-value math once the player's score rises
+  // again, so reject buys outright while the player is worth 0 LP.
+  if (side === "buy" && score <= 0) {
+    throw new PortfolioServiceError(
+      400,
+      "This player's price per share is 0 LP and cannot be bought.",
+    );
+  }
   const pricePerShare = toMoneyString(score);
 
   const player = await findPlayerByRiotId(gameName, tagLine, platform);

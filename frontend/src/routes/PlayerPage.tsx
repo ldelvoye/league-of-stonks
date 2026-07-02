@@ -25,7 +25,7 @@ export function PlayerPage() {
   const gameName = params.gameName ?? "";
   const tagLine = params.tagLine ?? "";
 
-  const [range, setRange] = useState<RangeKey>("ALL");
+  const [range, setRange] = useState<RangeKey>("S16");
   const [hoveredPoint, setHoveredPoint] = useState<Snapshot | null>(null);
 
   const { playerQuery, handleRefresh, isRefreshBusy } = usePlayerData(gameName, tagLine);
@@ -57,7 +57,7 @@ export function PlayerPage() {
   }, []);
 
   useEffect(() => {
-    setRange("ALL");
+    setRange("S16");
     setHoveredPoint(null);
   }, [gameName, tagLine]);
 

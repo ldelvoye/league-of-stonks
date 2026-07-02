@@ -2,6 +2,7 @@ import { Router, type RequestHandler } from "express";
 import rateLimit from "express-rate-limit";
 import { getPlayerHistory, getPlayerScore, getPlayerScoreAndHistory } from "../lib/playerService.js";
 import { getPlatform } from "../lib/riot.js";
+import { SEASON_16_KEY, SEASON_16_START_ISO, type SupportedSeasonKey } from "../lib/seasons.js";
 import { parseBoundedPositiveIntQuery } from "../lib/validation.js";
 
 const router = Router();
@@ -45,6 +46,26 @@ function parseRiotIdParams(
   return { gameName: rawGameName, tagLine: rawTagLine };
 }
 
+const DEFAULT_HISTORY_LIMIT = 100;
+const DEFAULT_HISTORY_MAX_LIMIT = 500;
+const SEASON_HISTORY_MAX_LIMIT = 5000;
+
+function parseSeasonQuery(rawSeason: unknown): SupportedSeasonKey | null | "invalid" {
+  if (rawSeason == null) return null;
+  if (typeof rawSeason !== "string") return "invalid";
+  const normalized = rawSeason.trim().toLowerCase();
+  if (!normalized) return "invalid";
+  if (normalized === SEASON_16_KEY) return SEASON_16_KEY;
+  return "invalid";
+}
+
+function seasonSinceDate(season: SupportedSeasonKey | null): Date | undefined {
+  if (season === SEASON_16_KEY) {
+    return new Date(SEASON_16_START_ISO);
+  }
+  return undefined;
+}
+
 // Get player history
 router.get("/:gameName/:tagLine/history", playerReadLimiter, async (req, res) => {
   const parsed = parseRiotIdParams(req.params.gameName, req.params.tagLine);
@@ -54,14 +75,25 @@ router.get("/:gameName/:tagLine/history", playerReadLimiter, async (req, res) =>
   }
   const { gameName, tagLine } = parsed;
 
+  const season = parseSeasonQuery(req.query.season);
+  if (season === "invalid") {
+    res.status(400).json({ error: `season must be '${SEASON_16_KEY}' when provided.` });
+    return;
+  }
+
   const platform = getPlatform(req);
-  const limit = parseBoundedPositiveIntQuery(req.query.limit, 100, 500);
+  const maxLimit = season ? SEASON_HISTORY_MAX_LIMIT : DEFAULT_HISTORY_MAX_LIMIT;
+  const fallbackLimit = season ? SEASON_HISTORY_MAX_LIMIT : DEFAULT_HISTORY_LIMIT;
+  const limit = parseBoundedPositiveIntQuery(req.query.limit, fallbackLimit, maxLimit);
   if (limit == null) {
     res.status(400).json({ error: "limit must be a positive integer within allowed range." });
     return;
   }
 
-  const result = await getPlayerHistory(gameName, tagLine, platform, { limit });
+  const result = await getPlayerHistory(gameName, tagLine, platform, {
+    limit,
+    since: seasonSinceDate(season),
+  });
   if (!result) {
     res.status(404).json({ error: "Player not found" });
     return;
@@ -78,17 +110,29 @@ router.get("/:gameName/:tagLine", playerReadLimiter, conditionalRefreshLimiter, 
   }
   const { gameName, tagLine } = parsed;
 
+  const season = parseSeasonQuery(req.query.season);
+  if (season === "invalid") {
+    res.status(400).json({ error: `season must be '${SEASON_16_KEY}' when provided.` });
+    return;
+  }
+
   const platform = getPlatform(req);
   const includeHistory = req.query.includeHistory === "1" || req.query.includeHistory === "true";
   const refresh = req.query.refresh === "1" || req.query.refresh === "true";
-  const limit = parseBoundedPositiveIntQuery(req.query.limit, 100, 500);
+  const maxLimit = season ? SEASON_HISTORY_MAX_LIMIT : DEFAULT_HISTORY_MAX_LIMIT;
+  const fallbackLimit = season ? SEASON_HISTORY_MAX_LIMIT : DEFAULT_HISTORY_LIMIT;
+  const limit = parseBoundedPositiveIntQuery(req.query.limit, fallbackLimit, maxLimit);
   if (limit == null) {
     res.status(400).json({ error: "limit must be a positive integer within allowed range." });
     return;
   }
 
   if (includeHistory) {
-    const result = await getPlayerScoreAndHistory(gameName, tagLine, platform, { limit, refresh });
+    const result = await getPlayerScoreAndHistory(gameName, tagLine, platform, {
+      limit,
+      refresh,
+      since: seasonSinceDate(season),
+    });
     res.json(result);
     return;
   }

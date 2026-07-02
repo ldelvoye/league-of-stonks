@@ -1,7 +1,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { getScoreAndHistory, scoreErrorMessage } from "../../lib/api.js";
+import { getScoreAndHistory, PLAYER_HISTORY_SEASON_S16, scoreErrorMessage } from "../../lib/api.js";
 import { queryKeys } from "./keys.js";
+
+const SEASON_HISTORY_LIMIT = 5000;
 
 export class PlayerRequestError extends Error {
   readonly status: number;
@@ -18,7 +20,10 @@ export function usePlayerQuery(gameName: string, tagLine: string) {
     queryKey: queryKeys.player.detail(gameName, tagLine),
     enabled: Boolean(gameName && tagLine),
     queryFn: async () => {
-      const result = await getScoreAndHistory(gameName, tagLine, 100, { refresh: false });
+      const result = await getScoreAndHistory(gameName, tagLine, SEASON_HISTORY_LIMIT, {
+        refresh: false,
+        season: PLAYER_HISTORY_SEASON_S16,
+      });
       if (!result.ok || !result.data) throw new PlayerRequestError(result.status);
       return result.data;
     },
@@ -36,7 +41,10 @@ export function useRefreshPlayer(gameName: string, tagLine: string) {
     await queryClient.fetchQuery({
       queryKey: queryKeys.player.detail(gameName, tagLine),
       queryFn: async () => {
-        const result = await getScoreAndHistory(gameName, tagLine, 100, { refresh: true });
+        const result = await getScoreAndHistory(gameName, tagLine, SEASON_HISTORY_LIMIT, {
+          refresh: true,
+          season: PLAYER_HISTORY_SEASON_S16,
+        });
         if (!result.ok || !result.data) throw new PlayerRequestError(result.status);
         return result.data;
       },

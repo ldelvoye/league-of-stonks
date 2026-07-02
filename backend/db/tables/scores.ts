@@ -174,15 +174,24 @@ export async function getLatestConfirmedMatchId(playerId: number): Promise<strin
 
 export async function getScoreHistory(
   playerId: number,
-  { limit = 100 }: { limit?: number } = {},
+  { limit = 100, since }: { limit?: number; since?: Date } = {},
 ): Promise<ScoreSnapshot[]> {
+  const queryValues: Array<number | Date> = [playerId];
+  let whereClause = "WHERE player_id = $1";
+  if (since) {
+    whereClause += ` AND COALESCE(game_ended_at, recorded_at) >= $2`;
+    queryValues.push(since);
+  }
+  const limitPlaceholder = `$${queryValues.length + 1}`;
+  queryValues.push(limit);
+
   const { rows } = await getPool().query(
     `SELECT ${SCORE_SNAPSHOT_SELECT}
      FROM score_snapshots
-     WHERE player_id = $1
+     ${whereClause}
      ORDER BY COALESCE(game_ended_at, recorded_at) DESC
-     LIMIT $2`,
-    [playerId, limit],
+     LIMIT ${limitPlaceholder}`,
+    queryValues,
   );
 
   return rows.map((row) => mapScoreSnapshot(row as Record<string, unknown>));

@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../backend/app.ts";
 import { getPool } from "../../backend/db/index.ts";
 import { recordMatchScoreSnapshot } from "../../backend/db/tables/scores.ts";
+import { SEASON_16_KEY, SEASON_16_START_ISO } from "../../backend/lib/seasons.ts";
 import {
   closeIntegrationDb,
   countRiotFetchCalls,
@@ -558,6 +559,66 @@ describe("player routes integration", () => {
 
     const invalidScoreLimit = await request(app).get("/api/player/Faker/KR1?includeHistory=1&limit=abc");
     expect(invalidScoreLimit.status).toBe(400);
+  });
+
+  it("filters includeHistory responses to the S16 season window", async () => {
+    const inserted = await getPool().query<{ player_id: number }>(
+      `INSERT INTO players (game_name, tag_line, puuid, platform)
+       VALUES ('SeasonTester', 'NA1', 'puuid-season-tester', 'na1')
+       RETURNING player_id`,
+    );
+    const playerId = inserted.rows[0].player_id;
+
+    const preseason = new Date("2026-01-16T23:59:59.000Z");
+    const seasonStart = new Date(SEASON_16_START_ISO);
+    const midSeason = new Date("2026-01-20T12:34:56.000Z");
+
+    await getPool().query(
+      `INSERT INTO score_snapshots (player_id, score, match_id, game_ended_at, source, recorded_at)
+       VALUES
+         ($1, 1900, 'NA1_preseason', $2, 'confirmed', $2),
+         ($1, 2100, 'NA1_s16_start', $3, 'confirmed', $3),
+         ($1, 2300, 'NA1_s16_mid', $4, 'confirmed', $4)`,
+      [playerId, preseason, seasonStart, midSeason],
+    );
+
+    const response = await request(app).get(
+      `/api/player/SeasonTester/NA1?includeHistory=1&season=${SEASON_16_KEY}&limit=5000`,
+    );
+    expect(response.status).toBe(200);
+    expect(Array.isArray(response.body.history)).toBe(true);
+    expect(response.body.history).toHaveLength(2);
+    expect(response.body.history[0]?.matchId).toBe("NA1_s16_start");
+    expect(response.body.history[1]?.matchId).toBe("NA1_s16_mid");
+  });
+
+  it("returns empty S16 history without forcing Riot sync when only preseason data exists", async () => {
+    const inserted = await getPool().query<{ player_id: number }>(
+      `INSERT INTO players (game_name, tag_line, puuid, platform)
+       VALUES ('SeasonOldOnly', 'NA1', 'puuid-season-old-only', 'na1')
+       RETURNING player_id`,
+    );
+    const playerId = inserted.rows[0].player_id;
+
+    const preseason = new Date("2026-01-16T23:59:59.000Z");
+    await getPool().query(
+      `INSERT INTO score_snapshots (player_id, score, match_id, game_ended_at, source, recorded_at)
+       VALUES ($1, 1800, 'NA1_preseason_only', $2, 'confirmed', $2)`,
+      [playerId, preseason],
+    );
+
+    mockRiotFetchWith({ throwError: new Error("Riot should not be called") });
+    const response = await request(app).get(
+      `/api/player/SeasonOldOnly/NA1?includeHistory=1&season=${SEASON_16_KEY}&limit=5000`,
+    );
+    expect(response.status).toBe(200);
+    expect(Array.isArray(response.body.history)).toBe(true);
+    expect(response.body.history).toHaveLength(0);
+  });
+
+  it("rejects unsupported season query values", async () => {
+    const invalidSeason = await request(app).get("/api/player/Faker/KR1?includeHistory=1&season=s15");
+    expect(invalidSeason.status).toBe(400);
   });
 
   it("player refresh endpoint enforces per-IP rate limit", async () => {

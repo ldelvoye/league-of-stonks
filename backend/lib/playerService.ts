@@ -519,13 +519,13 @@ async function getCachedPlayerHistory(
   gameName: string,
   tagLine: string,
   platform: string,
-  limit: number,
+  { limit, since }: { limit: number; since?: Date },
 ): Promise<{ player: Player; history: ScoreHistoryRows } | null> {
   const player = await findPlayerByRiotId(gameName, tagLine, platform);
   if (!player) {
     return null;
   }
-  const history = await getScoreHistory(player.playerId, { limit });
+  const history = await getScoreHistory(player.playerId, { limit, since });
   return { player, history };
 }
 
@@ -533,14 +533,14 @@ export async function getPlayerHistory(
   gameName: string,
   tagLine: string,
   platform: string,
-  { limit = 100 }: { limit?: number } = {},
+  { limit = 100, since }: { limit?: number; since?: Date } = {},
 ): Promise<PlayerHistory | null> {
   const player = await findPlayerByRiotId(gameName, tagLine, platform);
   if (!player) {
     return null;
   }
 
-  const history = await getScoreHistory(player.playerId, { limit });
+  const history = await getScoreHistory(player.playerId, { limit, since });
   return toPlayerHistory(player, history);
 }
 
@@ -560,7 +560,7 @@ async function refreshPlayerScoreDeduped(
     // Bound request latency during bursts: if a sync is already in-flight and
     // we have cached data, return it immediately instead of awaiting Riot.
     if (allowStaleWhileSyncing) {
-      const cached = await getCachedPlayerHistory(gameName, tagLine, platform, 1);
+      const cached = await getCachedPlayerHistory(gameName, tagLine, platform, { limit: 1 });
       if (cached?.history.length) {
         return cached.history[0].score;
       }
@@ -588,7 +588,7 @@ export async function getPlayerScore(
   }: { refresh?: boolean; allowStaleWhileSyncing?: boolean } = {},
 ): Promise<number | null> {
   if (!refresh) {
-    const cached = await getCachedPlayerHistory(gameName, tagLine, platform, 1);
+    const cached = await getCachedPlayerHistory(gameName, tagLine, platform, { limit: 1 });
     if (cached?.history.length) {
       return cached.history[0].score;
     }
@@ -617,11 +617,13 @@ export async function getPlayerScoreAndHistory(
   gameName: string,
   tagLine: string,
   platform: string,
-  { limit = 100, refresh = false }: { limit?: number; refresh?: boolean } = {},
+  { limit = 100, refresh = false, since }: { limit?: number; refresh?: boolean; since?: Date } = {},
 ): Promise<PlayerHistory> {
   if (!refresh) {
-    const cached = await getCachedPlayerHistory(gameName, tagLine, platform, limit);
-    if (cached && cached.history.length > 0) {
+    const cached = await getCachedPlayerHistory(gameName, tagLine, platform, { limit, since });
+    // Season-scoped windows may legitimately be empty while older history exists.
+    // In that case, return the filtered empty set instead of forcing a Riot sync.
+    if (cached && (since || cached.history.length > 0)) {
       return toPlayerHistory(cached.player, cached.history);
     }
   }
@@ -630,12 +632,12 @@ export async function getPlayerScoreAndHistory(
     allowStaleWhileSyncing: refresh,
   });
 
-  const cached = await getCachedPlayerHistory(gameName, tagLine, platform, limit);
+  const cached = await getCachedPlayerHistory(gameName, tagLine, platform, { limit, since });
   if (cached) {
     return toPlayerHistory(cached.player, cached.history);
   }
 
   const player = await resolvePlayer(gameName, tagLine, platform);
-  const history = await getScoreHistory(player.playerId, { limit });
+  const history = await getScoreHistory(player.playerId, { limit, since });
   return toPlayerHistory(player, history);
 }

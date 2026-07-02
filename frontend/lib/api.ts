@@ -14,6 +14,7 @@ import type {
   TopPerformer,
 } from "./types.js";
 import { PORTFOLIO_CONFLICT_CODES } from "../../backend/lib/portfolioConflictCodes.js";
+import { SEASON_16_KEY, type SupportedSeasonKey } from "../../backend/lib/seasons.js";
 
 /**
  * Thrown by query/mutation functions when a credentialed request receives a
@@ -102,15 +103,31 @@ function marketPath(suffix = ""): string {
   return `${API_BASE_URL}/api/market${suffix}`;
 }
 
+export interface GetScoreAndHistoryOptions {
+  refresh?: boolean;
+  season?: SupportedSeasonKey;
+}
+
+export const PLAYER_HISTORY_SEASON_S16 = SEASON_16_KEY;
+
 export const getScoreAndHistory = (
   gameName: string,
   tagLine: string,
   limit = 100,
-  { refresh = false }: { refresh?: boolean } = {},
-) =>
-  apiGet<PlayerHistory>(
-    `${playerPath(gameName, tagLine)}?includeHistory=1&limit=${limit}${refresh ? "&refresh=1" : ""}`,
-  );
+  { refresh = false, season }: GetScoreAndHistoryOptions = {},
+) => {
+  const params = new URLSearchParams({
+    includeHistory: "1",
+    limit: String(limit),
+  });
+  if (refresh) {
+    params.set("refresh", "1");
+  }
+  if (season) {
+    params.set("season", season);
+  }
+  return apiGet<PlayerHistory>(`${playerPath(gameName, tagLine)}?${params.toString()}`);
+};
 
 export function scoreErrorMessage(status: number): string {
   switch (status) {

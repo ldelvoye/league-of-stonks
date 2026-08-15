@@ -1,118 +1,81 @@
 # League of Stonks
 
-League of Stonks is a TypeScript monorepo with:
+> **Archived.** Ran from June to August 2026; no longer deployed, and `leagueofstonks.com` is gone. The code is here for anyone curious.
 
-- a backend API (`Express` + `Postgres` via Supabase)
-- a frontend SPA (`React` + `Vite` + `React Router`)
+A fantasy stock market for League of Legends. Every ranked player is a stock, their LP is the share price, and you get 50,000 LP of play money to bet on who's about to climb and who's about to tilt. Buy the smurf early, sell before the losing streak.
 
-Current product scope:
+Prices came from real match history via the Riot API. Background jobs walked the ranked ladder to keep them fresh — and since every synced match also seeded the other nine players in the lobby, the database taught itself about 261,000 players along the way.
 
-- Early-stage beta
-- Only NA (`na1`) players are supported right now
+NA (`na1`) only, ranked solo queue only, season 16 only.
+
+## Why it's archived
+
+The discovery jobs worked a little too well. 261k players and 906k score snapshots piled up against a 500 MB free-tier database, and two queries that scanned the entire players table on every run — the leaderboard rollup and an `ORDER BY RANDOM()` player picker — grew into 98% of all database time. Faced with paying to keep a 13-user hobby project alive, I turned it off and opened the source instead.
+
+## Stack
+
+TypeScript end to end. Express and Postgres (Supabase) on the back, React with Vite and React Router on the front, both deployed on Railway.
 
 ## Repo map
 
-- `backend/` API server and business logic
-- `backend/db/` DB connection, migrations, table access
-- `backend/routes/` HTTP routes
-- `backend/lib/` domain/service logic
-- `frontend/src/` React app routes, components, state, and client entrypoint
-- `frontend/lib/` shared frontend API/data/formatting utilities
-- `frontend/` Vite config, static assets, and global styles
-- `scripts/` utility scripts (for example seed scripts)
-- `tsconfig.json` backend TS config (outputs to `backend/dist`)
-- `frontend/tsconfig.json` frontend TS config (type-checks React app)
+| Path              | What's in it                                                |
+| ----------------- | ----------------------------------------------------------- |
+| `backend/routes/` | HTTP routes                                                 |
+| `backend/lib/`    | Domain logic — Riot client, LP estimation, portfolios, auth |
+| `backend/db/`     | Connection pool, migrations, per-table query modules        |
+| `backend/jobs/`   | Scheduled sync and cleanup jobs                             |
+| `frontend/src/`   | React routes, components, state                             |
+| `frontend/lib/`   | Shared API, formatting, and data helpers                    |
+| `scripts/`        | One-off utilities and the cron trigger                      |
+| `tests/`          | Unit and integration tests (`npm test`)                     |
 
-## Runtime architecture
+## Running it locally
 
-- Backend exposes:
-  - `GET /health`
-  - `GET /api/player/:gameName/:tagLine`
-  - `GET /api/player/:gameName/:tagLine/history`
-  - `POST /api/jobs/riot-history-sync/leaderboard` (cron, authenticated)
-  - `POST /api/jobs/riot-history-sync/random` (cron, authenticated)
-  - `GET /api/jobs/riot-budget` (cron, authenticated)
-- Frontend fetches backend API from:
-  - `http://localhost:3000` when frontend runs locally on `localhost:3001`
-  - `https://api.leagueofstonks.com` otherwise
-- Backend CORS allowlist comes from `ALLOWED_ORIGINS` (comma-separated)
+You'll need a Riot API key and a Postgres database. Copy `.env.example` to `.env` and fill in `RIOT_API_KEY` and `DATABASE_URL` — that's enough to boot; the rest of the variables are documented inline in that file.
 
-## Environment variables
+```bash
+npm install
+npm run db:up        # local Postgres via Docker
+npm run db:migrate   # apply schema
+npm run db:seed      # optional: insert a test player
 
-Create a `.env` in repo root (or set env vars in Railway):
+npm run dev                  # backend on :3000
+npm run local:dev:frontend   # frontend on :3001
+```
 
-- `RIOT_API_KEY` Riot API key
-- `DATABASE_URL` Supabase Postgres URL (use session pooler for deployed backend)
-- `ALLOWED_ORIGINS` frontend origins allowed for CORS, comma-separated
+Other database commands: `npm run db:status` shows applied versus pending migrations, and `npm run db:schema` migrates and then regenerates `backend/db/schema.snapshot.md`.
 
-`.env.example` has the canonical variable list.
+For production builds, `npm run build` compiles both halves and `npm run start:backend` runs the compiled server.
 
-## Commands
+## API
 
-### Production-oriented commands
+```
+GET  /health
+GET  /api/player/:gameName/:tagLine            # score, optional ?refresh=1 and ?includeHistory=1
+GET  /api/player/:gameName/:tagLine/history
+GET  /api/market/stats | /top | /recent-trades
+GET  /api/portfolio                            # session-authenticated
+POST /api/portfolio/trades
+     /api/auth/*                               # register, login, logout, email verification,
+                                               # password reset, profile updates
+POST /api/jobs/riot-history-sync/leaderboard   # cron, bearer CRON_SECRET
+POST /api/jobs/riot-history-sync/random        # cron, bearer CRON_SECRET
+GET  /api/jobs/riot-budget                     # cron, bearer CRON_SECRET
+```
 
-- `npm run build:backend` compile backend to `backend/dist`
-- `npm run build:frontend` type-check and bundle frontend via Vite to `frontend/dist`
-- `npm run build` build both backend and frontend
-- `npm run start:backend` run compiled backend (`backend/dist/index.js`)
+Riot rate limits are the real constraint on all of this. [`docs/riot-api-costs.md`](docs/riot-api-costs.md) works out the exact call cost of every route and cron job against Riot's 20/second and 100/2-minute budgets.
 
-### Local development commands
+## How it was deployed
 
-- `npm run dev` run backend in watch mode via `tsx`
-- `npm run local:dev:frontend` run Vite dev server at `http://localhost:3001`
-- `npm run local:start:frontend` preview the production frontend build
+Four Railway services off this one repo:
 
-Typical local split workflow:
+- **backend** — `npm ci && npm run build:backend`, started with `npm run start:backend`
+- **frontend** — `npm ci && npm run build:frontend`, served statically from `frontend/dist` (see `Staticfile`)
+- **leaderboard-sync** — cron, every 30 minutes, running `node scripts/trigger-riot-history-sync.js` with `SYNC_MODE=leaderboard`
+- **random-discovery** — cron, every 5 minutes, same script with `SYNC_MODE=random-discovery`
 
-1. Terminal A: `npm run dev` (backend on `:3000`)
-2. Terminal B: `npm run local:dev:frontend` (frontend on `:3001`)
+The cron services just POST to the backend's `/api/jobs/*` endpoints with a shared `CRON_SECRET`. Postgres was Supabase; the backend connected through the session pooler.
 
-## Database workflow
+## License
 
-- `npm run db:up` start local Postgres via Docker
-- `npm run db:migrate` apply schema/migrations using current `DATABASE_URL`
-- `npm run db:status` show applied vs pending migrations
-- `npm run db:schema` apply pending migrations, then refresh `backend/db/schema.snapshot.md`
-- `npm run db:seed` insert test player history data
-
-## Riot API usage and cron costs
-
-See [docs/riot-api-costs.md](docs/riot-api-costs.md) for per-route Riot call counts and min/max cost estimates for the leaderboard and random-discovery cron jobs.
-
-## Deployment (Railway)
-
-Use two Railway services from the same repo, plus optional cron services for background player sync.
-
-### Backend service
-
-- Build command: `npm ci && npm run build:backend`
-- Start command: `npm run start:backend`
-- Required vars: `RIOT_API_KEY`, `DATABASE_URL`, `ALLOWED_ORIGINS`
-- Domain: `https://api.leagueofstonks.com`
-
-### Frontend service
-
-- Build command: `npm ci && npm run build:frontend`
-- Start command: blank (static hosting)
-- Static root: `frontend/dist` (configured with `Staticfile`)
-- Custom domain: `leagueofstonks.com` / `www.leagueofstonks.com`
-
-### Cron services (optional)
-
-Create one Railway Cron service per sync mode from the same repo.
-
-- Build command: `npm ci`
-- Start command: `node scripts/trigger-riot-history-sync.js`
-- Required vars: `SYNC_MODE` (`leaderboard` or `random-discovery`), `API_BASE_URL`, `CRON_SECRET`
-- Suggested schedules: leaderboard every 30 minutes, random discovery every 5 minutes
-
-The backend service also needs `CRON_SECRET` set so `/api/jobs/*` endpoints are enabled.
-
-## Conventions for contributors and coding agents
-
-- Keep backend and frontend deployable independently.
-- Keep code in TypeScript.
-- Treat `build:*` and `start:backend` as production commands.
-- Use `local:*` commands only for local-only behavior (watch mode, local static port).
-- Do not introduce duplicate utilities/routes if similar logic already exists; extend existing modules when possible.
-- Prefer small, focused changes that keep API behavior predictable.
+MIT — see [LICENSE](LICENSE).
